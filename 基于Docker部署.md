@@ -56,7 +56,7 @@
    - 点击 `+ New` 新建一个 `New Profile`
    - 选择 `SSH connetion`, 取个名字(name), 然后`connetion`处填写上面查到的 ip 地址, 不能选`#root`, 要选`$用户名` 进行登录(登录进去要换root再`su`)
 
-# 安装docker
+# 安装Docker
 - <a href="https://www.runoob.com/docker/debian-docker-install.html">参考文档</a>
 - 一次执行以下命令:
    - `sudo apt install apt-transport-https ca-certificates curl software-properties-common`: 安装依赖包
@@ -91,3 +91,8 @@ echo '{
 
 - 比如我要搜索ubuntu, 原命令: `docker search ubuntu`
 - 现在只有: `docker search docker.1ms.run/ubuntu`(加上docker.1ms.run/)
+
+# Docker compose
+### 安装
+- `apt-get install docker-compose-plugin`: apt安装
+- `docker compose version`: 查看版本
