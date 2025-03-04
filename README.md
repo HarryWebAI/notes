@@ -24,5 +24,7 @@
 # 实战项目
 
 - myoa: 基于 vue + elmentplus + django + drf 打造的企业 OA 管理系统
-  - <a href="https://github.com/HarryLeoAI/myoa_face">前端</a>
-  - <a href="https://github.com/HarryLeoAI/myoa_back">后端</a>
+  - <a href="https://github.com/HarryWebAI/myoa_frontend">前端</a>
+  - <a href="https://github.com/HarryWebAI/myoa_backend">后端</a>
+  - <a href="./基础部署.md">基础部署</a>
+  - <a href="./基于Docker部署.md">基于Docker部署</a>
