@@ -4,10 +4,11 @@
 
 # Vue3
 
-- <a href="./ES6.md">ES6(TS)</a>
+- <a href="./ES6.md">ES6</a>
 - <a href="./Vue_基础.md">Vue\_基础</a>
 - <a href="./Vue_路由.md">Vue\_路由</a>
 - <a href="./Vue_Pinia.md">Vue_Pinia</a>
+- <a href="./typescript.md">TS</a>
 
 # Django
 
@@ -20,11 +21,13 @@
 
 - <a href="./Git_基础.md">Git\_基础</a>
 - <a href="./SQL.md">SQL</a>
+- <a href="./基础部署.md">基础部署</a>
+- <a href="./基于Docker部署.md">基于Docker部署</a>
 
 # 实战项目
 
-- myoa: 基于 vue + elmentplus + django + drf 打造的企业 OA 管理系统
+### myoa: 基于 vue + elmentplus + django + drf 打造的企业 OA 管理系统
   - <a href="https://github.com/HarryWebAI/myoa_frontend">前端</a>
   - <a href="https://github.com/HarryWebAI/myoa_backend">后端</a>
-  - <a href="./基础部署.md">基础部署</a>
-  - <a href="./基于Docker部署.md">基于Docker部署</a>
+
+### <a href="https://github.com/HarryWebAI/myerp">myErp个体商户仓库管理系统</a>
