@@ -444,25 +444,329 @@ export default App;
   4. 判断样式, 当按钮的 id 和当前被激活按钮的 id 相等时, 当前按钮就拥有激活样式
   5. 根据传入的 tab.id, 来判断排序的规则, 进行排序
 
-- 补充: 使用`lodash`进行排序
+### 补充: 使用`lodash`进行排序
 
-  1. 安装: `npm i --save-dev @types/lodash`
-  2. 使用
+1. 安装: `npm i --save-dev @types/lodash`
+2. 使用
 
-  ```ts
-  // 导入 lodash
-  import _ from "lodash";
+```ts
+// 导入 lodash
+import _ from "lodash";
 
-  // 激活样式和排序
-  const handleSort = function (id: number) {
-    setCurrentTab(tabs.find((tab) => tab.id === id) || tabs[0]);
-    if (id === 1) {
-      // 使用 _.orderBy(要排序的列表, "根据哪个字段进行排序", "asc正序/desc倒序")
-      setComments(_.orderBy(comments, "id", "asc"));
-    }
-    if (id === 2) {
-      setComments(_.orderBy(comments, "id", "desc"));
-    }
+// 激活样式和排序
+const handleSort = function (id: number) {
+  setCurrentTab(tabs.find((tab) => tab.id === id) || tabs[0]);
+  if (id === 1) {
+    // 使用 _.orderBy(要排序的列表, "根据哪个字段进行排序", "asc正序/desc倒序")
+    setComments(_.orderBy(comments, "id", "asc"));
+  }
+  if (id === 2) {
+    setComments(_.orderBy(comments, "id", "desc"));
+  }
+};
+```
+
+### 补充: 使用`classNames`优化类名控制
+
+1. 安装: `npm install classnames --save`
+2. 使用
+
+```ts
+// 导入
+import classNames from "classnames";
+
+<button
+  key={tab.id}
+  onClick={() => handleSort(tab.id)}
+  // 在这里使用 className = {classNames({样式类名: 判断条件})}
+  className={classNames({
+    active: currentTab.id === tab.id,
+  })}
+>
+  {tab.name}
+</button>;
+```
+
+### 补充: 受控表单绑定
+
+> `v-model`
+
+- 设置一个 `useState` 变量
+- 通过`value={变量名}`绑定变量
+- 通过`onChange={(e) => 函数(e.target.value)}`绑定变量设设置变量的函数
+
+```ts
+// 评论者
+const [commenter, setCommenter] = useState("");
+// 评论内容
+const [commentContent, setCommentContent] = useState("");
+
+// 添加数据...
+const newComment = {
+  id: comments.length + 1,
+  // 评论者
+  name: commenter,
+  // 评论内容
+  content: commentContent,
+};
+
+{
+  /* 发表评论 */
+}
+<div>
+  <input
+    placeholder="请输入评论者"
+    onChange={(e) => setCommenter(e.target.value)}
+    value={commenter}
+  />
+  <br />
+  <br />
+  <textarea
+    placeholder="请输入评论内容"
+    onChange={(e) => setCommentContent(e.target.value)}
+    value={commentContent}
+  ></textarea>
+  <br />
+  <br />
+  <button onClick={handleSubmit}>发表评论</button>
+</div>;
+```
+
+### 获取 DOM
+
+- 使用`useRef`钩子函数
+
+```ts
+// 导入 useRef
+import { useRef } from "react";
+
+function App() {
+  // 定义 ref
+  const inputRef = useRef(null);
+
+  const handleClick = () => {
+    console.dir(inputRef.current);
   };
-  ```
+
+  return (
+    <div>
+      // 绑定 ref
+      <input type="text" ref={inputRef} />
+      <button onClick={handleClick}>获取输入框内容</button>
+    </div>
+  );
+}
+
+export default App;
+```
+
+- 聚焦 `inputRef.current.focus()`
+
+### 补充: `uuid`和`dayjs`
+
+1. 安装 uuid: `npm install uuid --save`
+2. 安装 dayjs: `npm install dayjs --save`
+3. 使用:
+
+```ts
+// 导入
+import { v4 as uuidv4 } from "uuid";
+import dayjs from "dayjs";
+
+const comments = [
+  {
+    // 使用 uuid 生成独一无二的 id
+    id: uuidv4(),
+    name: "张三",
+    content: "评论内容",
+    // 使用 dayjs() 生成当前事件, format('设置格式')
+    commentTime: dayjs().format("YYYY-MM-DD HH:mm:ss"),
+  },
+];
+```
+
+# 组件通信
+
+> 组件之间的数据传递, 根据组件嵌套关系的不同, 有不同的通信方法
+
+### 父子通信
+
+###### 父传子
+
+```ts
+// 子组件
+// 接收父组件传递的数据: props: {key: type}
+function Son(props: { msg: string }) {
+  return <div>{props.msg}</div>;
+}
+
+// 父组件
+function App() {
+  const msg: string = "hello";
+  return (
+    <div>
+      {/* 挂载子组件 */}
+      <Son msg={msg} />
+    </div>
+  );
+}
+
+export default App;
+```
+
+1. 创建一个子组件`Son`
+2. 创建一个父组件`App`
+3. 父组件创建一个常量`msg`, 并在挂载子组件时通过`<Son key={常量名}>`
+4. 子组件通过配置参数`(props: {key: type})`进行接收, 最后在模板上渲染`{props.key}`即可实现父传子
+
+- **props 可以传递任意数据**
+- **但子组件的 props 只读**, 不能直接进行修改, 父组件的数据只能父组件修改
+- 一种特殊的情况: 如下所示, 此时, 可以通过`props.children`取到 span
+
+```ts
+<Son>
+  <span></span>
+</Son>
+```
+
+###### 子传父
+
+```ts
+import { useState } from "react";
+
+// 子组件
+// 获取时也可以解构赋值, 不用props, 用结构赋值 ({ onGetMsg }: { onGetMsg: (msg: string) => void })
+function Son(props: { onGetMsg: (msg: string) => void }) {
+  const sonMsg = "子组件想传递给父组件的信息";
+  return (
+    <div>
+      <button
+        onClick={() => {
+          // 如果结构赋值, 这里就不用 props.onGetMsg 了
+          props.onGetMsg(sonMsg);
+        }}
+      >
+        点击我
+      </button>
+    </div>
+  );
+}
+
+function App() {
+  const [msg, setMsg] = useState("");
+
+  const getMsg = (msg: string) => {
+    setMsg(msg);
+  };
+  return (
+    <div>
+      <h1>App</h1>
+      <Son onGetMsg={getMsg} />
+      <h2>{msg}</h2>
+    </div>
+  );
+}
+
+export default App;
+```
+
+1. 父组件搞个函数交给子组件
+2. 子组件接收函数(还是父传子)
+3. 子组件将自己想要传递的数据通过父组件交给自己的函数传递出去
+
+### 兄弟通信
+
+```ts
+import { useState } from "react";
+
+// 子组件1: 哥哥
+function BrotherOne({ onGetMsg }: { onGetMsg: (msg: string) => void }) {
+  const brotherOneMsg = "哥哥想传递给弟弟的信息";
+  return (
+    <div>
+      <button onClick={() => onGetMsg(brotherOneMsg)}>
+        点击我获取哥哥的数据
+      </button>
+    </div>
+  );
+}
+
+// 子组件2: 弟弟
+function BrotherTwo({ msg }: { msg: string }) {
+  return (
+    <div>
+      <h2>弟弟接收到的数据: {msg}</h2>
+    </div>
+  );
+}
+
+// 父组件
+function App() {
+  const [msg, setMsg] = useState("");
+
+  const getMsg = (msg: string) => {
+    setMsg(msg);
+  };
+
+  return (
+    <div>
+      <BrotherOne onGetMsg={getMsg} />
+      <BrotherTwo msg={msg} />
+    </div>
+  );
+}
+
+export default App;
+```
+
+1. 子组件 1 传递给父组件
+2. 父组件作为桥梁, 将子组件 1 的内容传递给子组件 2
+3. 说白了是靠共同父组件 **(状态提升)**
+
+### 跨层组件通信
+```ts
+import { createContext, useContext } from "react";
+
+const MessageContext = createContext<string>('')
+
+function GrandSon() {
+  const msg: string = useContext(MessageContext)
+  return (
+    <div>
+      <h2>我是底层组件!</h2>
+      <h2>我获取到了顶层组件传递的数据:</h2>
+      <h2>{msg}</h2>
+    </div>
+  )
+}
+
+function Son() {
+  return (
+    <div>
+      <GrandSon />
+    </div>
+  )
+}
+
+function App() {
+  const msg = '我是顶层组件的数据'
+  return (
+    <div>
+      <MessageContext.Provider value={msg}>
+        <Son />
+      </MessageContext.Provider>
+    </div>
+  )
+}
+
+export default App;
+```
+- 父组件(顶层组件) -> 子组件(中间) -> 孙组件(底层组件), 实现孙组件获取父组件的数据
+1. 导入`createContext, useContext`
+2. 初始化`const MessageContext = createContext<string>('')` (createContext)
+3. 父组件渲染子组件时, 外面包一层`MessageContext.Provider` (Provider提供)
+4. 孙组件(底层组件)跨过子组件获取父组件(顶层组件)的数据: `const msg: string = useContext(MessageContext)` (useContext)
+- 注意! 子组件也可以通过这样的方式获取父组件的数据, 因为他俩的相对关系也是父顶, 子底, 但是有更方便的父子通信方式, 所以不用.(可以没必要, 而不是不行)
+
+# useEffect
 
