@@ -948,4 +948,303 @@ export default App;
 > **就该定义在组件函数的最上面**
 
 # Redux
+
 > 类似于 `Vue.Pinia` => 集中状态管理工具
+
+### Redux 实现数据修改的逻辑
+
+1. `state`: 一个存放着需要被管理管理的对象
+2. `action`: 一个用于描述如何修改对象的对象
+3. `reducer`: 一个函数, 根据你提供的`action`, 生成一个新的`state`
+
+### Redux 在 React 中使用
+
+1. 安装两个插件: `npm i @reduxjs/toolkit react-redux`
+
+   - `tooklit` => 简称 RTK, 封装了很多操作 redux 的工具包(简化代码)
+   - `react-redux` => redux 和 react 组件通信的中间件(连接二者)
+   - 打开`package.json`依赖声明部分, 确保已成功导入
+
+2. 投入使用: 新建 `@/store/`, 并在该目录下新建
+   - `modules/` => 存放状态管理文件
+   - `index.ts` => 用于作为出口, 导出状态管理文件
+   - 通常来说, 目录结构都是这么设计的
+
+### 使用`Redux`实现`Count`案例
+
+1. 新建 `@/store/counterStore.ts`
+
+```ts
+// 导入createSlice
+import { createSlice } from "@reduxjs/toolkit";
+
+// 定义 state 类型 (ts)
+export interface CounterState {
+  count: number;
+}
+
+const counterStore = createSlice({
+  // 配置名称
+  name: "counter",
+
+  // 初始化状态
+  initialState: {
+    count: 0,
+  },
+
+  // 编写修改数据的方法
+  reducers: {
+    increment: (state) => {
+      state.count += 1;
+    },
+
+    decrement: (state) => {
+      state.count -= 1;
+    },
+  },
+});
+
+// 结构赋值获取actions
+const { increment, decrement } = counterStore.actions;
+// 获取reducer
+const reducer = counterStore.reducer;
+
+// 以按需导出的方式导出actions
+export { increment, decrement };
+// 以默认导出的方式导出reducer
+export default reducer;
+```
+
+2. 编辑 `@/store/index.ts`
+
+```ts
+// 导入configureStore
+import { configureStore } from "@reduxjs/toolkit";
+// 导入子模块reducer
+import counterReducer from "./modules/counterStore";
+
+const store = configureStore({
+  // 组合子模块reducer
+  reducer: {
+    counter: counterReducer,
+  },
+});
+
+// 定义 RootState 类型
+export type RootState = ReturnType<typeof store.getState>;
+
+// 导出store
+export default store;
+```
+
+3. `@/main.ts` 中注入`store`
+
+```ts
+// 导入核心依赖
+import { StrictMode } from "react";
+import { createRoot } from "react-dom/client";
+// 导入store
+import store from "./store";
+// 导入Provider
+import { Provider } from "react-redux";
+
+// 导入根组件
+import App from "./App.tsx";
+
+// 渲染根组件到id为 <root> 的Dom元素上
+createRoot(document.getElementById("root")!).render(
+  <StrictMode>
+    {/* 使用Provider包裹根组件, 实现注入store */}
+    <Provider store={store}>
+      <App />
+    </Provider>
+  </StrictMode>
+);
+```
+
+4. 在 `@/App.tsx` 中投入使用
+
+```tsx
+// 导入useSelector, useDispatch
+import { useSelector, useDispatch } from "react-redux";
+// 导入RootState
+import { RootState } from "./store";
+// 导入actions
+import { increment, decrement } from "./store/modules/counterStore";
+
+function App() {
+  // 获取状态
+  const count = useSelector((state: RootState) => state.counter.count);
+
+  // 获取dispatch
+  const dispatch = useDispatch();
+
+  return (
+    <div>
+      <button onClick={() => dispatch(decrement())}>-</button>
+      <h1>{count}</h1>
+      <button onClick={() => dispatch(increment())}>+</button>
+    </div>
+  );
+}
+
+export default App;
+```
+
+- 针对`typescript`的难点:
+  - 在 `counterStore.ts` 中: 以定义接口的形式, 添加了 `CounterState` 接口来定义计数器状态的类型
+  - 在 `index.ts` 中: 添加了 `RootState` 类型, 它代表整个 store 的状态类型, 使用 `ReturnType<typeof store.getState>` 来自动推导出完整的状态类型(溯源可以找到`redux.d.ts`里的相关声明)
+  - 在 `App.tsx` 中: 通过导入 `RootState`, 实现了将 `useSelector` 中的 **any 类型替换为具体的 RootState** 类型
+
+### action 传递参数
+
+1. 编辑`counterStore.ts`, 增加方法
+
+```ts
+    // ...
+    // 编写修改数据的方法
+    reducers:{
+        increment: (state) => {
+            state.count += 1;
+        },
+
+        decrement: (state) => {
+            state.count -= 1;
+        },
+
+        // 增加方法, 第一参数不变还是state, 第二参数是action
+        addToNum: (state, action) => {
+            // 通过 action.payload 获取action传进来的参数
+            state.count += action.payload;
+        },
+
+        minusToNum: (state, action) => {
+            state.count -= action.payload;
+        }
+    }
+
+    // ...
+
+// 直接导出(新增 addToNum, minusToNum)
+export const { increment, decrement, addToNum, minusToNum } = counterStore.actions;
+export default counterStore.reducer;
+```
+
+2. 编辑 `App.tsx`:
+
+```tsx
+// 导入actions(新曾 addToNum, minusToNum)
+import {
+  increment,
+  decrement,
+  addToNum,
+  minusToNum,
+} from "./store/modules/counterStore";
+
+// ...
+
+return (
+  <div>
+    <button onClick={() => dispatch(decrement())}>-</button>
+    // 投入使用时传参
+    <button onClick={() => dispatch(minusToNum(10))}>-10</button>
+    <h1>{count}</h1>
+    <button onClick={() => dispatch(increment())}>+</button>
+    <button onClick={() => dispatch(addToNum(10))}>+10</button>
+  </div>
+);
+```
+
+- 在`store`文件中, 定义新的`reducer`, 参数都是`(state, action)`
+- 在获取组件传递过来的参数时, 是使用第二参数的 payload 属性: `action.payload`
+
+### 异步获取数据
+
+- 新建`@/store/channels.ts`
+
+```ts
+import { createSlice } from "@reduxjs/toolkit";
+import axios from "axios";
+
+// 定义 channel 类型
+export interface Channel {
+  userId: number;
+  id: number;
+  title: string;
+  completed: boolean;
+}
+
+// 定义 state 类型
+export interface ChannelState {
+  // state 为 Channel 组成的列表
+  channelList: Channel[];
+}
+
+const channelStore = createSlice({
+  name: "channel",
+
+  initialState: {
+    channelList: [],
+  },
+
+  reducers: {
+    setChannels(state, action) {
+      state.channelList = action.payload;
+    },
+  },
+});
+
+// 异步获取数据
+const { setChannels } = channelStore.actions;
+const fetchChannelList = () => {
+  return async (dispatch) => {
+    const res = await axios.get("https://jsonplaceholder.typicode.com/todos");
+    dispatch(setChannels(res.data));
+  };
+};
+
+export { fetchChannelList };
+export default channelStore.reducer;
+```
+
+2. 在`App.tsx`中导入并使用
+
+```ts
+// 导入 useEffect
+import { useEffect } from "react";
+// 导入useSelector, useDispatch
+import { useSelector, useDispatch } from "react-redux";
+// 导入actions
+import { fetchChannelList } from "./store/modules/channelStore";
+
+function App() {
+  // 获取状态
+  const channelList = useSelector(
+    (state: RootState) => state.channel.channelList
+  );
+  // 获取dispatch
+  const dispatch = useDispatch();
+  // 使用useEffect, 声明在组件首次渲染时, 调用fetchChannelList(), 设置channelList的值
+  useEffect(() => {
+    dispatch(fetchChannelList());
+  }, [dispatch]);
+
+  return (
+    <div>
+      <ul>
+        {channelList.map((channel) => (
+          <li key={channel.id}>{channel.title}</li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+export default App;
+```
+
+- 这一部分比较抽象, 只有记住格式, 想要异步获取数据
+
+1. 正常写`createSlice`部分
+2. 在本体获取`reducer`, 编写异步方法, 最后暴露`action`出去的是这个经过加工变成异步的方法: `fetchChannelList`
+3. 在外部调用此`action`时, 用的是`useEffect`的形式调用
