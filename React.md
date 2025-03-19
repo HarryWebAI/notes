@@ -947,3 +947,5 @@ export default App;
 
 > **就该定义在组件函数的最上面**
 
+# Redux
+> 类似于 `Vue.Pinia` => 集中状态管理工具
