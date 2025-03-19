@@ -724,20 +724,21 @@ export default App;
 3. 说白了是靠共同父组件 **(状态提升)**
 
 ### 跨层组件通信
+
 ```ts
 import { createContext, useContext } from "react";
 
-const MessageContext = createContext<string>('')
+const MessageContext = createContext<string>("");
 
 function GrandSon() {
-  const msg: string = useContext(MessageContext)
+  const msg: string = useContext(MessageContext);
   return (
     <div>
       <h2>我是底层组件!</h2>
       <h2>我获取到了顶层组件传递的数据:</h2>
       <h2>{msg}</h2>
     </div>
-  )
+  );
 }
 
 function Son() {
@@ -745,28 +746,204 @@ function Son() {
     <div>
       <GrandSon />
     </div>
-  )
+  );
 }
 
 function App() {
-  const msg = '我是顶层组件的数据'
+  const msg = "我是顶层组件的数据";
   return (
     <div>
       <MessageContext.Provider value={msg}>
         <Son />
       </MessageContext.Provider>
     </div>
-  )
+  );
 }
 
 export default App;
 ```
+
 - 父组件(顶层组件) -> 子组件(中间) -> 孙组件(底层组件), 实现孙组件获取父组件的数据
+
 1. 导入`createContext, useContext`
 2. 初始化`const MessageContext = createContext<string>('')` (createContext)
-3. 父组件渲染子组件时, 外面包一层`MessageContext.Provider` (Provider提供)
+3. 父组件渲染子组件时, 外面包一层`MessageContext.Provider` (Provider 提供)
 4. 孙组件(底层组件)跨过子组件获取父组件(顶层组件)的数据: `const msg: string = useContext(MessageContext)` (useContext)
+
 - 注意! 子组件也可以通过这样的方式获取父组件的数据, 因为他俩的相对关系也是父顶, 子底, 但是有更方便的父子通信方式, 所以不用.(可以没必要, 而不是不行)
 
 # useEffect
+
+> useEffect 是一个 React Hook 函数, 用于在 React 组件中创建不是由事件引起, 而是**由渲染本身引起的操作**, 比如发送 Ajax 请求, 更改 DOM 等
+
+### demo
+
+```ts
+import { useEffect, useState } from "react";
+
+// 配置接口
+const URL = "https://jsonplaceholder.typicode.com/todos";
+
+function App() {
+  // 配置接收数据的list
+  const [list, setList] = useState<{ id: number; title: string }[]>([]);
+
+  // 数据获取函数
+  async function getList() {
+    // 请求接口
+    const response = await fetch(URL);
+    // 转为json
+    const result = await response.json();
+    // console.log(result);
+    // 设置list的值
+    setList(result);
+  }
+
+  // ** 使用 useEffect 调用数据获取函数
+  useEffect(() => {
+    getList();
+  }, []);
+
+  return (
+    <div>
+      <h1>列表</h1>
+      <ul>
+        {list.map((item) => (
+          <li key={item.id}>{item.title}</li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+export default App;
+```
+
+1. 导入`useEffect`
+2. 配置一个接口地址
+3. 声明 useEffect(), 第一个参数传递一个回调函数, 回调函数中定义一个函数请求接口, 然后将值赋给`list`: 模拟请求接口数据, 并由 list 接收
+4. `useEffect(()=>{}, [依赖项])` => 通常来说, 第一个参数被称为`副作用操作`, 第二个参数被称为`依赖项数组`
+
+### 依赖项
+
+> `useEffect()`根据第二参数`依赖项`的不同, 决定第一参数`副作用操作`的`执行时机`
+
+1. 空数组: `useEffect(() = >{ }, [])` => **组件初始渲染执行一次**
+2. 什么都不写(没有第二参数):`useEffect(() => { })` => **组件初次渲染一次**, **组件更新执行一次**
+3. 声明依赖项后: `useEffect(() => { }, [比如某个useState变量])` => **初次渲染一次**, **当依赖项变化时执行一次**
+
+> **不传参和传空数组不一样**
+
+### 清除副作用
+
+```ts
+import { useEffect, useState } from "react";
+
+function Son() {
+  useEffect(() => {
+    const timer = setInterval(() => {
+      console.log("定时器执行ing...");
+    }, 1000);
+
+    // return 一个匿名箭头函数
+    return () => {
+      // 组件卸载时执行清除副作用操作的逻辑
+      clearInterval(timer);
+    };
+  }, []);
+  return <div>Son</div>;
+}
+
+function App() {
+  const [show, setShow] = useState(true);
+  return (
+    <div>
+      <button onClick={() => setShow(!show)}>隐藏son</button>
+      {show && <Son />}
+    </div>
+  );
+}
+
+export default App;
+```
+
+1. Son 组件在被渲染后, 开启定时器
+2. App 组件挂载 Son 组件, 按钮点击事件模拟卸载 Son 组件
+3. 如果没有在`useEffect()`中 return 出去一个匿名函数, 并且在匿名函数里面`清除副作用`的话, 定时器会在 Son 被卸载后继续执行
+
+# 自定义 hook
+
+### 封装自定义 hook 的思路
+
+1. 声明一个以 use 打头的函数
+2. 函数体内编写业务逻辑
+3. return 出去组件中用到的状态或者函数(以对象或者数组的形式)
+4. 在哪里用, 就解构取出来
+
+```ts
+import { useState } from "react";
+
+// 封装自定义hook
+function useToggle() {
+  // 逻辑
+  const [show, setShow] = useState(true);
+
+  const toggle = () => {
+    setShow(!show);
+  };
+
+  // return 出去
+  return { show, toggle };
+}
+
+function App() {
+  // 解构赋值获取状态数据和函数
+  const { show, toggle } = useToggle();
+
+  return (
+    <div>
+      // 投入使用
+      {show && <div>我是div</div>}
+      <button onClick={toggle}>点击隐藏</button>
+    </div>
+  );
+}
+
+export default App;
+```
+
+# React Hook 的使用规则
+
+- 截至目前, 我们已经认识了这些 Hook:
+  - `useState`(状态),
+  - `useRef`(获取 dom 元素),
+  - `useContext`(底层组件实现于顶层通信),
+  - `useEffect`(渲染自动调用, 根据依赖项配置再次调用),
+  - `自定义hook`
+- 它们使用都有以下规则
+  - 只能在组件中或者其他自定义 Hook 中调用
+  - 只能在组件顶层调用, 不能嵌套在 if , for 或者其他函数中
+- 错误示范
+
+```ts
+import { useState } from "react";
+
+// const [error ,setError] = useState(null);      // 错误! 不能在组件外调用
+
+function App() {
+  // if(true) {
+  //   const [error, setError] = useState(null);  // 错误! 不能嵌套在 if, for 或其他函数中
+  // }
+
+  return (
+    <div>
+      <p>注释部分都是错误示范</p>
+    </div>
+  );
+}
+
+export default App;
+```
+
+> **就该定义在组件函数的最上面**
 
