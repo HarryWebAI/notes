@@ -1248,3 +1248,19 @@ export default App;
 1. 正常写`createSlice`部分
 2. 在本体获取`reducer`, 编写异步方法, 最后暴露`action`出去的是这个经过加工变成异步的方法: `fetchChannelList`
 3. 在外部调用此`action`时, 用的是`useEffect`的形式调用
+
+### 补充: 浏览器插件
+1. `React Developer Tools`
+2. `Redux DevTools`
+3. `Vue.js devtools`
+
+> 浏览器插件都装一装, 帮助开发
+
+### 个人总结
+1. Redux.Store 的写法相较 `Pinia` 更复杂, 需要`1导入createSlice`, `2定义 name, initialState, reducers`, 最后暴露出去(默认暴露reducer, `{}`暴露具体的actions)
+2. 暴露后, 约定俗成, 还得有个入口文件整合, 需要`1导入configureStore`, `2导入reducer`, `3在configureStore()组合`
+3. 在`main.js/ts`里注入`store`, 需要`1导入入口store`, `导入Provider`, `用<Provider store={store}>`包`<App>`
+4. 在组件中实际投入使用时, `1引入使用useSelector`获取`initialState`里定义的全局状态变量, `2使用useDispatch, 初始化后`, 使用`useDispatch(要调用的,定义在reducers里的,并已暴露的函数)`
+
+# ReactRouter
+> 目前基于React版本更新, 传统的Router被淘汰了, 最新版的, 使用`npx create-react-router@latest` 命令创建的 Router, 它不再是一个简单的路由库, 而是一个完整的框架了, 因此我决定搁置React的学习, 等到后面更新的教程(因为开始React只是基于扩展我自身的技术栈, 并不是立刻需要投入使用的. 我还是更多使用 Vue)
