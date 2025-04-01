@@ -17,6 +17,7 @@
 - <a href="./Python_面向对象.md">Python\_面向对象</a>
 - <a href="./Django博客开发.md">Django\_博客开发(Django 基础)</a>
 - <a href="./DjangoRestFramework.md">DjangoRestFramework 学习</a>
+- <a href="./python实现并发的概念.md">python实现并发的概念</a>
 
 # 其他工具和部署
 
@@ -24,11 +25,13 @@
 - <a href="./SQL.md">SQL</a>
 - <a href="./基础部署.md">基础部署</a>
 - <a href="./基于Docker部署.md">基于Docker部署</a>
+- <a href="./windows开发环境部署.md">重装windows系统后部署开发环境</a>
 
 # 实战项目
 
 ### myoa: 基于 vue + elmentplus + django + drf 打造的企业 OA 管理系统
-  - <a href="https://github.com/HarryWebAI/myoa_frontend">前端</a>
-  - <a href="https://github.com/HarryWebAI/myoa_backend">后端</a>
+
+- <a href="https://github.com/HarryWebAI/myoa_frontend">前端</a>
+- <a href="https://github.com/HarryWebAI/myoa_backend">后端</a>
 
 ### <a href="https://github.com/HarryWebAI/myerp">myErp个体商户仓库管理系统</a>
