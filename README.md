@@ -18,6 +18,7 @@
 - <a href="./Django博客开发.md">Django\_博客开发(Django 基础)</a>
 - <a href="./DjangoRestFramework.md">DjangoRestFramework 学习</a>
 - <a href="./python实现并发的概念.md">python实现并发的概念</a>
+- <a href="./django异步.md">django框架并发开发</a>
 
 # 其他工具和部署
 

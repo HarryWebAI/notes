@@ -10,12 +10,12 @@
 
 ## 2, vsCode
 
-1. 下载vsCode <https://code.visualstudio.com/download>
+1. 下载 vsCode <https://code.visualstudio.com/download>
 2. 安装一系列插件(使用Syncing备份)
 
 ## 3, node环境
 
-1. 安装nvm <https://github.com/coreybutler/nvm-windows/releases>
+1. 安装 nvm <https://github.com/coreybutler/nvm-windows/releases>
     - 一直下一步, 不要改路径
     - 安装后重启(如果 `node -v` 失效)
 
@@ -25,15 +25,21 @@
 
 ## 3, python环境
 
-1. 下载python <https://www.python.org/downloads/>
+1. 下载 python <https://www.python.org/downloads/>
     - 无脑安装
     - cmd > `python --version`, 显示版本则成功
+2. 更新 pip, 配置镜像
+
+```bash
+pip install --upgrade pip
+pip config set global.index-url https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple
+```
 
 ## 4, 安装git
 
-1. 下载git <https://git-scm.com/downloads/win>
+1. 下载 git <https://git-scm.com/downloads/win>
     - 记得勾选gitBash, 无脑安装
-2. 配置git:
+2. 配置 git:
 
 ```bash
 git config --global user.name "name"
