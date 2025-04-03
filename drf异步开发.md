@@ -15,20 +15,7 @@ pip install django_rest_framework
 pip install adrf
 ```
 
-## 环境搭建注意
-
-1. 创建虚拟环境后, 最好再设置一遍, 并 **重启** 编辑器, 确保是使用的虚拟环境的python
-2. 如果不幸还是污染了全局环境, 可以依次执行下面的命令, 让 pip list 里只留下 pip
-
-```bash
-# 1, 获取当前环境(全局)的所有依赖并生成 .txt 文件
-pip freeze > requirements.txt
-
-# 2, 根据 .txt 文件删除所有依赖
-pip uninstall -r requirements.txt -y
-```
-
-4. 配置 `settings.py`
+- 最后配置 `settings.py`
 
 ```python
 INSTALLED_APPS = [
@@ -44,6 +31,19 @@ INSTALLED_APPS = [
 
 # 配置 asgi 服务器
 ASGI_APPLICATION = 'adrfdemo.asgi.application'
+```
+
+## 环境搭建注意
+
+1. 创建虚拟环境后, 最好再设置一遍, 并 **重启** 编辑器, 确保是使用的虚拟环境的python
+2. 如果不幸还是污染了全局环境, 可以依次执行下面的命令, 让 pip list 里只留下 pip
+
+```bash
+# 1, 获取当前环境(全局)的所有依赖并生成 .txt 文件
+pip freeze > requirements.txt
+
+# 2, 根据 .txt 文件删除所有依赖
+pip uninstall -r requirements.txt -y
 ```
 
 ## 异步 APIView
