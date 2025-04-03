@@ -57,7 +57,16 @@ git config --global user.email "email"
 1. 下载 redis for windows <https://github.com/redis-windows/redis-windows/releases>
     - 压缩包形式, 使用时需打开 `redis-server.exe`
 
-## 7, postman
+## 7, Postman
+
+> postman 是接口测试工具
 
 1. 下载 post man <https://www.postman.com/downloads/>
+    - 安装后需要登录 (用谷歌邮箱登录)
+
+## 8, Navicat 免费版
+
+> navicat 是数据库管理工具
+
+1. 下载 Navicate <https://www.navicat.com.cn/download/navicat-premium-lite#windows>
     - 安装后需要登录 (用谷歌邮箱登录)
