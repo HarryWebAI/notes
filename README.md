@@ -28,6 +28,7 @@
 - <a href="./基础部署.md">基础部署</a>
 - <a href="./基于Docker部署.md">基于Docker部署</a>
 - <a href="./windows开发环境部署.md">重装windows系统后部署开发环境</a>
+- <a href="./mac开发环境部署.md">Mac系统部署开发环境</a>
 
 # 实战项目
 
