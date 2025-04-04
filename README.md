@@ -20,6 +20,7 @@
 - <a href="./python实现并发的概念.md">python实现并发的概念</a>
 - <a href="./django异步.md">django框架并发开发</a>
 - <a href="./drf异步开发.md">drf异步开发</a>
+- <a href="./微服务_gRPC.md">微服务gRPC</a>
 
 # 其他工具和部署
 

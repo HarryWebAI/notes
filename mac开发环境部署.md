@@ -74,3 +74,42 @@ alias pip="/Library/Frameworks/Python.framework/Versions/3.13/bin/pip3"
 1. `pip install django`
 2. 注意这里命令不一样了, 到指定目录下: `python -m django startproject PROJECT_NAME`
 3. `Ctrl Shift P`, 选择 python 解释器, 新建虚拟环境, which pip3/python3 确认使用的 pip/python, 装包, 搞定
+
+## 安装和配置cursor
+
+### 安装 cursor
+
+- 官网 <https://www.cursor.com/>
+
+### 安装 navicat 免费版
+
+- 中文官网 <https://www.navicat.com.cn/download/navicat-premium-lite>
+
+### 尝试配置 mcp 服务 browertools
+
+- 参考文档 <https://browsertools.agentdesk.ai/installation>
+
+1. 确保安装 NodeJS
+2. 确保安装谷歌浏览器或者谷歌浏览器为内核的浏览器
+3. 克隆代码: `git clone https://github.com/AgentDeskAI/browser-tools-mcp.git` (这是一个浏览器插件)
+4. 将 /repo/chrome-extension 拖到浏览器扩展程序里面 (确保开发者模式打开)
+5. 打开cursor, 设置, MCP, `+Add New Gloabl MCP server` , 编辑 `mcp.json`
+
+```json
+{
+  "mcpServers": {
+    "browsertools": {
+      // 这里可以改版本, 或者直接 latest
+      "command": "npx @agentdeskai/browser-tools-mcp@latest",
+      "args": {
+        "browser": "chrome",
+        "headless": true
+      }
+    }
+  }
+}
+```
+
+- 终端运行命令 `npx @agentdeskai/browser-tools-mcp@latst` 并挂起
+
+> 注意: 浏览器工具服务器在端口 3025 上运行, 请确保终止在此端口上运行的所有进程.
