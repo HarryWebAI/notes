@@ -36,7 +36,7 @@
 ## 安装依赖包
 
 1. grpcio: 用于运行 gRPC 协议, `pip install grpcio`
-2. grpcio-tools: 用于将 protocol buffers 语法的代码转为 python 代码 `pip install grpcio-toolstools`
+2. grpcio-tools: 用于将 protocol buffers 语法的代码转为 python 代码 `pip install grpcio-tools`
 
 ## vsCode 装插件
 
@@ -49,7 +49,7 @@
 - 示例, 新建 `article.proto` 并编辑
 
 ```proto
-// 指定版本号为3, 下面的代码必须是有效代码的第一行
+// 指定版本号为3
 syntax = "proto3";
 
 // 单行注释
@@ -86,24 +86,33 @@ bool 布尔真假
 string 字符串
 */
 
+// 定义列表请求
 message ArticleListRequest {
     int32 page = 1;
-    int32 pagesize = 2;
+    int32 page_size = 2;
 }
 
+// 定义列表响应
 message ArticleListResponse {
+    // 重复 数据类型为Article 数据名称为articles = 位置在1
     repeated Article articles = 1;
 }
 
+// 定义详情请求
 message ArticelDetailRequest {
     int32 pk = 1;
 }
 
-// 定义服务 service
+// 定义详情响应
+message ArticleDetailResponse {
+    Article Article = 1;
+}
+
+// 定义服务
 service ArticleService {
-    // rpc 服务 (请求) returns (响应)
+    // rpc 具体服务(请求消息) returns (响应消息)
     rpc ArticleList(ArticleListRequest) returns (ArticleListResponse);
-    rpc ArticelDetial(ArticleListRequest) returns (Article);
+    rpc ArticelDetial(ArticelDetailRequest) returns (ArticleDetailResponse);
 }
 ```
 
@@ -121,3 +130,292 @@ service ArticleService {
   - `-I.` 编译在当前路径(.代表当前路径)
   - `--python_out=.` 将最终文件生成在本地(.代表当前路径)
   - `--grpc_python_out=. article.proto` 要编译的文件是 .proto
+- 这会生成两个文件: `article_pb2_grpc.py`(服务), `article_pb2.py`(数据结构), 这类似于生成了两个接口定义文件
+
+## 投入使用
+
+- 上面已经实现了接口定义, 现在实现服务器: `main.py`
+
+```python
+# 倒入服务和数据结构
+import article_pb2_grpc, article_pb2
+# 倒入 grpc 模块
+import grpc
+from concurrent.futures import ThreadPoolExecutor
+
+
+# 定义服务
+class ArticleService(article_pb2_grpc.ArticleServiceServicer):
+    # 列表服务(来自 rpc ArticleList(ArticleListRequest) returns (ArticleListResponse) 这句话)
+    def ArticleList(self, request, context):
+        # 获取客户端发来的数据
+        page = request.page
+        page_size = request.page_size
+
+        # 假设获取成功, 我们这里打印一下即可, 不实际去请求数据库
+        print(f"客户端发送的请求数据是: page: {page}, page_size :{page_size}")
+
+        # 定义响应
+        response = article_pb2.ArticleListResponse()
+
+        # 假设我们通过客户端请求发过来的数据, 查询了数据库, 获取了以下数据
+        articles = [
+            article_pb2.Article(id=101, title='11', content='22', create_time='2025-04-04'),
+            article_pb2.Article(id=102, title='xx', content='yy', create_time='2025-04-04')
+        ]
+
+        # 将数据添加到响应中
+        response.articles.extend(articles)
+
+        # 记得 return 出去
+        return response
+
+# 定义 main 函数
+def main():
+    # 定义服务器, 同步情况下必须生成线程池
+    server = grpc.server(ThreadPoolExecutor(max_workers=10))
+    # 添加服务
+    article_pb2_grpc.add_ArticleServiceServicer_to_server(ArticleService(), server)
+    # 指定端口
+    server.add_insecure_port("0.0.0.0:5001")
+
+    # 启动五福
+    server.start()
+    print("gRPC服务已启动")
+
+    # 开启死循环, 维持服务器运行
+    server.wait_for_termination()
+
+# 运行python文件时自动执行 main 函数
+if __name__ == "__main__":
+    main()
+```
+
+- 接着实现客户端, 新建一个python项目`grpc_client` , 将 `article_pb2.py`, `article_pb2_grpc.py` 两个文件拷贝到新项目中
+- 实现 `grpc_client/main.py`:
+
+```python
+import article_pb2, article_pb2_grpc
+import grpc
+
+def main():
+    # 开启服务
+    with grpc.insecure_channel("127.0.0.1:5001") as channel:
+        # 创建stub
+        stub = article_pb2_grpc.ArticleServiceStub(channel)
+        # 创建请求
+        request = article_pb2.ArticleListRequest()
+
+        # 模拟请求传入的数据, 假设客户想请求获取第100页的数据, 每页20条数据
+        request.page = 100
+        request.page_size = 20
+
+        # 请求数据获取响应
+        response = stub.ArticleList(request)
+
+        # 请求成功后, 现在服务器那边的数据存在了 response.articles 中了, 我们可以遍历文章列表
+        for article in response.articles:
+            print(article)
+
+# 运行 python 文件
+if __name__ == "__main__":
+    main()
+```
+
+## 异步使用
+
+- 改写服务器
+
+```python
+import article_pb2_grpc, article_pb2
+import grpc
+from concurrent.futures import ThreadPoolExecutor
+# 倒入 python 异步库
+import asyncio
+
+
+class ArticleService(article_pb2_grpc.ArticleServiceServicer):
+    # 在定义服务方法时添加 async 关键字, 将函数变为异步
+    async def ArticleList(self, request, context):
+        page = request.page
+        page_size = request.page_size
+
+        print(f"客户端发送的请求数据是: page: {page}, page_size :{page_size}")
+
+        # 在这里模拟阻塞, 其实真实投入使用时, 我们可以在这里 await 一些真实操作, 比如获取数据库的数据
+        await asyncio.sleep(1)
+        
+        response = article_pb2.ArticleListResponse()
+
+        articles = [
+            article_pb2.Article(id=101, title='11', content='22', create_time='2025-04-04'),
+            article_pb2.Article(id=102, title='xx', content='yy', create_time='2025-04-04')
+        ]
+
+        response.articles.extend(articles)
+
+        return response
+    
+async def main():
+    server = grpc.aio.server()
+    article_pb2_grpc.add_ArticleServiceServicer_to_server(ArticleService(), server)
+    server.add_insecure_port("0.0.0.0:5001")
+
+    await server.start()
+    print("gRPC服务已启动")
+
+    await server.wait_for_termination()
+
+if __name__ == "__main__":
+    # 这里必须要使用 asyncio.run 来执行异步 main 函数
+    asyncio.run(main())
+```
+
+- 改写客户端
+
+```python
+import article_pb2
+import article_pb2_grpc
+import grpc
+import asyncio
+
+# 定义异步函数
+async def main():
+    # 定义异步上下文管理器
+    async with grpc.aio.insecure_channel("127.0.0.1:5001") as channel:
+        stub = article_pb2_grpc.ArticleServiceStub(channel)
+        request = article_pb2.ArticleListRequest()
+
+        request.page = 100
+        request.page_size = 20
+
+        # 异步请求服务器
+        response = await stub.ArticleList(request)
+
+        for article in response.articles:
+            print(article)
+
+if __name__ == "__main__":
+    asyncio.run(main())
+```
+
+## 微服务集成到 Django
+
+### 准备工作
+
+1. 新建 django 项目
+2. 新建 app: article
+3. 新建模型, settings 注册app
+4. 执行迁移
+5. 新建 `~/article/management/commands/initfakearticles.py`, 生成一些假的测试数据
+
+### 使用命令的形式开启 rpc 服务
+
+1. 新建app: rpc
+2. 将之前写好的`article_pb2_grpc.py`, `article_pb2.py` 复制一份到该目录下
+3. 修改 `article_pb2_grpc.py`的一句倒入代码: `from rpc import article_pb2 as article__pb2`
+    - 因为现在在django项目中, 所以我们应该 from 模块 import 模块里的某个python文件
+4. 新建 `~/rpc/managemnt/commands/runrpcserver.py`
+
+```python
+from django.core.management import BaseCommand
+from rpc import article_pb2, article_pb2_grpc
+from article.models import Article as ArticleModel
+import grpc
+import asyncio
+
+# 这个类就是之前课程中写好的服务器端代码改的
+class ArticleService(article_pb2_grpc.ArticleServiceServicer):
+    async def ArticleList(self, request, context):
+        page = request.page
+        page_size = request.page_size
+
+        print(f"客户端发送的请求数据是: page: {page}, page_size :{page_size}")
+        
+        # 创建响应
+        response = article_pb2.ArticleListResponse()
+        
+        articles = []
+        
+        # 这里开始, 准备真实查询数据库
+        queryset = ArticleModel.objects.all()
+
+        # 这一步会真正的查询数据库, 所以需要异步迭代
+        async for article in queryset:
+            # 将数据写入空列表
+            articles.append(article_pb2.Article(
+                id = article.id,
+                title = article.title,
+                content = article.content,
+                create_time = article.create_time.strftime("%Y-%m-%d")
+            ))
+
+        # 将处理好的列表写入 response
+        response.articles.extend(articles)
+
+        # 返回响应
+        return response
+
+class Command(BaseCommand):
+
+    # 这里其实就是之前课程中写好的服务器的 main 函数, 改名为 start, 因为在类里, 所以需要传入参数(self)
+    async def start(self):
+        server = grpc.aio.server()
+        article_pb2_grpc.add_ArticleServiceServicer_to_server(ArticleService(), server)
+        server.add_insecure_port("0.0.0.0:5001")
+
+        await server.start()
+        print("gRPC服务已启动, 监听0.0.0.0:5001")
+
+        await server.wait_for_termination()
+
+    # 这里等价于之前的“自动运行”, 但我们是利用django框架执行命令 python3 manage.py runrpcserver 运行
+    def handle(self, *args, **options):
+        asyncio.run(self.start())
+```
+
+- 此时, 执行命令, 就可以实现运行该 rpc 服务
+
+### 在视图层模拟访问该rpc服务
+
+- 视图层代码
+
+```python
+from django.shortcuts import render
+import grpc
+from rpc import article_pb2, article_pb2_grpc
+from django.http.response import JsonResponse
+
+# 异步视图
+async def article_list(request):
+    # 开启异步上下文
+    async with grpc.aio.insecure_channel("127.0.0.1:5001") as channel:
+
+        # 创建 stub
+        stub = article_pb2_grpc.ArticleServiceStub(channel)
+        # 创建请求
+        article_request = article_pb2.ArticleListRequest()
+        
+        # 实际使用时, 我们其实可以从 request 里获取用户请求的页码以及每页多少数据
+        # article_request.page = request.page
+        article_request.page = 100
+        article_request.page_size = 20
+
+        # 异步调用rpc服务, rpc服务会访问数据库, 所以需要 await
+        response = await stub.ArticleList(article_request)
+
+        # 再次处理数据
+        articles = []
+
+        for article in response.articles:
+            articles.append({
+                "id": article.id,
+                "title": article.title,
+                "content": article.content,
+                "create_time": article.create_time
+            })
+
+        return JsonResponse({"articles":articles})
+```
+
+- 配置好路由, 访问执行路由, 我们就实现了模拟某个接口, 请求微服务, 获取数据库数据(文章列表)的功能
