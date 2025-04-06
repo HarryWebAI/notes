@@ -128,8 +128,9 @@ service ArticleService {
   - `python3 -m` python3 执行以下命令
   - `grpc-tools.protoc` 使用 grpc-tools 编译 proto
   - `-I.` 编译在当前路径(.代表当前路径)
-  - `--python_out=.` 将最终文件生成在本地(.代表当前路径)
-  - `--grpc_python_out=. article.proto` 要编译的文件是 .proto
+  - `--python_out=.` 将最终文件生成在当前路径(xxx_pb2.py)
+  - `--grpc_python_out=.` 将最终文件生成在当前路径(xxx_pb2_grpc.py)
+  - `article.proto` 指定要编译的文件是 xxx.proto
 - 这会生成两个文件: `article_pb2_grpc.py`(服务), `article_pb2.py`(数据结构), 这类似于生成了两个接口定义文件
 
 ## 投入使用
@@ -419,3 +420,267 @@ async def article_list(request):
 ```
 
 - 配置好路由, 访问执行路由, 我们就实现了模拟某个接口, 请求微服务, 获取数据库数据(文章列表)的功能
+
+## 其他数据类型
+
+```proto
+syntax = "proto3";
+
+// 枚举
+enum BookType {
+    STORY = 0;
+    LOVE = 1;
+    SCIENCE = 2;
+}
+
+message Book {
+    // 基本数据类型
+    string name = 1;
+    BookType type = 2;
+
+    // map <key类型, value类型> 标签名 = 位置
+    map<string, int32> tags = 3;
+
+    // 多选一
+    oneof author_one_of {
+        string username = 4;
+        string realname = 5;
+    }
+}
+
+// 列表
+message BookList {
+    repeated Book books = 1;
+}
+
+message BookListRequest {
+    int32 page = 1;
+}
+
+message BookListResponse {
+    repeated Book books = 1;
+}
+
+service BookService {
+    rpc BookList(BookListRequest) returns (BookListResponse);
+}
+```
+
+## gRPC 进阶
+
+### 元数据
+
+> 元数据 metadata 可以理解为: 类似于http的请求头.
+
+- `((key, value),(key, value))` 元组形式 (key, value)
+
+- 示例代码: 服务端 server
+
+```python
+from protos import article_pb2_grpc, article_pb2
+import grpc
+from concurrent.futures import ThreadPoolExecutor
+# from grpc._server import _Context # context 基类
+
+
+class ArticleService(article_pb2_grpc.ArticleServiceServicer):
+    def ArticleList(self, request, context):
+        # 获取元数据 context.invacation_metadata()
+        # print('客户端发送的元数据metadata是:', context.invocation_metadata())
+        for key, value in context.invocation_metadata():
+            print(f"{key}, {value}")
+
+        # 返回元数据 context.set_trailing_metadata((在第一个参数位置配置元数据))
+        context.set_trailing_metadata((
+            ('allow', 'True'),
+            ('status', 'Healthy')
+        ))
+
+        page = request.page
+        page_size = request.page_size
+        
+        response = article_pb2.ArticleListResponse()
+        
+        articles = [
+            article_pb2.Article(id=101, title='11', content='22', create_time='2025-04-04'),
+            article_pb2.Article(id=102, title='xx', content='yy', create_time='2025-04-04')
+        ]
+        
+        response.articles.extend(articles)
+
+        return response
+
+
+def main():
+    server = grpc.server(ThreadPoolExecutor(max_workers=10))
+    article_pb2_grpc.add_ArticleServiceServicer_to_server(ArticleService(), server)
+    server.add_insecure_port("0.0.0.0:5001")
+ 
+    server.start()
+    print("gRPC服务已启动")
+
+    server.wait_for_termination()
+
+
+if __name__ == "__main__":
+    main()
+```
+
+- 示例代码: 客户端
+
+```python
+from protos import article_pb2, article_pb2_grpc
+import grpc
+
+def main():
+    with grpc.insecure_channel("127.0.0.1:5001") as channel:
+        stub = article_pb2_grpc.ArticleServiceStub(channel)
+        request = article_pb2.ArticleListRequest(page=1, page_size=20)
+
+        # 配置元数据
+        metadata = (
+            ('username', 'liudehua'),
+            ('token', 'liudehua_token')
+        )
+
+        request.page = 100
+        request.page_size = 20
+
+        # 调用rpc接口时, 不再直接调用, 而是通过 .with_call(request不变, 传入metadata)
+        response, call = stub.ArticleList.with_call(request, metadata=metadata)
+
+        # 获取服务端通过的元数据 call.trailing_metadata()
+        # print(call)
+        for key, value in call.trailing_metadata():
+            print(f"{key}, {value}")
+
+        print(response.articles)
+
+if __name__ == "__main__":
+    main()
+```
+
+- 总结
+  - 客户端发送数据: `response, call = stub.具体服务.with_call(request, metadata=metadata)` 类似于发起请求时配置请求头
+  - 客户端接收数据: `call.trailing_metadata()` 类似于得到响应时获取额外的响应数据
+  - 服务端接收数据: `context.invacation_metadata()` 类似于收到请求时, 读取请求头里的内容
+  - 服务端发送数据: `context.set_trailing_metadata((在第一个参数位置配置元数据))` 类似于响应请求时, 携带额外的数据, 要注意两个括号包起来, 因为配置的元数据只能作为第一个参数
+  - 数据类型在这里是元组, 可以使用 `for key, value in tuple` 的形式遍历
+- 一个注意点: 在使用vsCode编辑时, 如果一个控制台运行了服务端, 请在运行客户端时, 选择“在专用终端中运行Python”, 这会使客户端的python程序运行到一个新的终端里
+
+### 拦截器
+
+> 和 axios.interceptor一样, 类似框架中间件
+
+- 服务端demo
+
+```python
+# 定义拦截器
+class FirstInterceptor(grpc.ServerInterceptor):
+    # 重写 intercept_service 方法
+    def intercept_service(self, continuation, handler_call_details):
+        print('第一个拦截器开始拦截')
+
+        # 配置下一个拦截器
+        next_handler = continuation(handler_call_details)
+
+        print('第一个拦截器拦截结束')
+
+        # 必须: 返回下一个拦截器
+        return next_handler
+    
+class SecondInterceptor(grpc.ServerInterceptor):
+    def intercept_service(self, continuation, handler_call_details):
+        print('第二个拦截器开始拦截')
+
+        # 即使是最后一个, 也要这样写, 如果下面没有拦截器了, 就执行后续的代码
+        next_handler = continuation(handler_call_details)
+
+        print('第二个拦截器拦截结束')
+
+        return next_handler
+
+
+# 使用拦截器
+def main():
+    # 在创建服务器时, 配置参数 interceptors = [多个拦截器对象]
+    server = grpc.server(
+        ThreadPoolExecutor(max_workers=10),
+        # 配置服务器拦截器
+        interceptors=[
+            FirstInterceptor(), # 是对象, 不是类, 所以加上()实例化类为对象
+            SecondInterceptor(),
+        ]
+    )
+    article_pb2_grpc.add_ArticleServiceServicer_to_server(ArticleService(), server)
+    server.add_insecure_port("0.0.0.0:5001")
+ 
+    server.start()
+    print("gRPC服务已启动")
+
+    server.wait_for_termination()
+```
+
+- 客户端demo
+
+```python
+# 定义拦截器
+class ClientInterceptor(grpc.UnaryUnaryClientInterceptor):
+    """
+    grpc.请求数据形式 响应数据形式 ClientInterceptor
+    grpc下面提供了4种拦截器:
+    一元对一元
+    一元对流Stream
+    流对一元
+    流对流
+    """
+    def intercept_unary_unary(self, continuation, client_call_details, request):
+        print('拦截开始')
+
+        next_handeler = continuation(client_call_details, request)
+
+        print('拦截结束')
+
+        return next_handeler
+
+
+# 使用拦截器
+def main():
+    with grpc.insecure_channel("127.0.0.1:5001") as channel:
+        # 创建一个将要被拦截的channel = grpc.intercept_channel(原始channel, 拦截器对象)
+        intercepted_channel = grpc.intercept_channel(channel, ClientInterceptor())
+        # 然后创建 stub 的时候, 用这挂上拦截器的新channel
+        stub = article_pb2_grpc.ArticleServiceStub(intercepted_channel)
+
+        request = article_pb2.ArticleListRequest(page=1, page_size=20)
+
+        metadata = (
+            ('username', 'liudehua'),
+            ('token', 'liudehua_token')
+        )
+
+        request.page = 100
+        request.page_size = 20
+
+        response, call = stub.ArticleList.with_call(request, metadata=metadata)
+        for key, value in call.trailing_metadata():
+            print(f"{key}, {value}")
+
+        print(response.articles)
+```
+
+- 总结:
+  - 服务端定义拦截器: 先继承指定类 `class FirstInterceptor(grpc.ServerInterceptor):`, 然后重写 `intercept_service(self, continuation, handler_call_details)` 方法, 里面可以做一些事, 但必须 `next_handler = continuation(handler_call_details)`(返回下一个拦截器)
+  - 服务端使用拦截器: `server = grpc.server(..., interceptors = [可以指定多个拦截器实例])`
+  - 客户端定义拦截器: `class ClientInterceptor(grpc.客户端数据形式 服务端数据形式 ClientInterceptor):`, 然后重写 `intercept_请求数据形式_响应数据形式(self, continuation, client_call_details, request)`, 同样必须 `return continuation(client_call_details, request)`(返回下一拦截器)
+  - 客户端使用拦截器:
+
+  ```python
+  with grpc.insecure_channel("127.0.0.1:5001") as channel:
+        # 1, 创建一个将要被拦截的channel = grpc.intercept_channel(原始channel, 拦截器对象)
+        intercepted_channel = grpc.intercept_channel(channel, ClientInterceptor())
+        # 2, 然后创建 stub 的时候, 用这挂上拦截器的新channel
+        stub = article_pb2_grpc.ArticleServiceStub(intercepted_channel)
+
+        # ...
+  ```

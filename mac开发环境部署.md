@@ -110,3 +110,31 @@ alias pip="/Library/Frameworks/Python.framework/Versions/3.13/bin/pip3"
 - 打开任意网站, 检查, 控制台部分打开 BrowserToolsMCP, 当页面出现 “BrowserToolsMCP已经开始调试此浏览器”, 说明该mcp正确投入使用
 
 > 注意: 浏览器工具服务器在端口 3025 上运行, 请确保终止在此端口上运行的所有进程.
+
+## mac 配置文件默认打开方式
+
+> 安装python后, 默认打开方式是python自带的编辑器, 我需要调整为vsCode打开
+
+- 右键文件, 显示简介, 选择打开方式, 设置为vsCode打开并应用到所有即可
+
+## mac 配置 vscode 新开控制台页也是使用虚拟环境
+
+> 不明原因, 即使配置好了虚拟环境, 再新开终端, 有可能采用全局的python解释器, 所以设置一下
+
+1. `command + ,` 打开设置, 搜索`python.terminal.activateEnvironment`
+2. 在`setting.json`中编辑
+
+```json
+{
+    "workbench.iconTheme": "vscode-icons",
+    "terminal.integrated.defaultProfile.windows": "Git Bash",
+    "workbench.colorTheme": "Default Dark Modern",
+    "explorer.confirmDragAndDrop": false,
+    "explorer.confirmDelete": false,
+    "python.terminal.launchArgs": [
+        
+    ],
+    // 这里添加这句话
+    "python.terminal.activateEnvironment": true
+}
+````
