@@ -684,3 +684,155 @@ def main():
 
         # ...
   ```
+
+### 元数据+拦截器实现模拟服务端认证
+
+```python
+# 定义拦截器
+class AuthenticateInterceptor(grpc.ServerInterceptor):
+    def intercept_service(self, continuation, handler_call_details):
+        # 获取元数据并且转为字典
+        metadata = dict(handler_call_details.invocation_metadata)
+
+        # 验证: 假设验证逻辑为用户名username必须是liudehua
+        if 'username' in metadata and metadata['username'] == 'liudehua':
+
+            # 去下一个拦截器(表示通过验证)
+            return continuation(handler_call_details)
+        else:
+            # 定义 terminate 方法, 有两个参数 (request, context)
+            def terminate(request, context):
+                # 断开链接(响应状态码status, 响应信息details)
+                context.abort(grpc.StatusCode.UNAUTHENTICATED, '用户名必须是刘德华!')
+
+            # 验证失败
+            return grpc.unary_unary_rpc_method_handler(terminate)
+
+# 使用拦截器
+def main():
+    server = grpc.server(
+        ThreadPoolExecutor(max_workers=10),
+        # 配置服务端拦截器
+        interceptors=[
+            AuthenticateInterceptor()
+        ]
+    )
+    article_pb2_grpc.add_ArticleServiceServicer_to_server(ArticleService(), server)
+    server.add_insecure_port("0.0.0.0:5001")
+ 
+    server.start()
+    print("gRPC服务已启动")
+
+    server.wait_for_termination()
+```
+
+- 拦截器获取元数据: `handler_call_details.invocation_metadata`
+- 当验证失败时:
+    1. 定义一个terminate函数用于断开请求
+    2. 构造一个 handler, 传入terminate函数
+    3. 其实 continuation(handler_call_details) 也是一个 handler
+
+- 上面的代码逻辑较为简单, 如果有些比较复杂的逻辑, 可以使用插件(grpc-intercepotr)使代码更优雅: `pip install grpc-interceptor`
+
+```python
+"""需求: 拦截器层我们需要访问数据库(模拟), 并且用户绑定到 context 中投入使用"""
+# 插件实现拦截器
+from grpc_interceptor import ServerInterceptor
+
+# 定义拦截器
+class UserInterceptor(ServerInterceptor):
+    # 1, 首先实现 interceptor 方法
+    def intercept(self, method: Callable[..., Any], request_or_iterator: Any, context: grpc.ServicerContext, method_name: str) -> Any:
+        # 1.1, 绑定user数据
+        context.user = self.user
+
+        # 1.2, 固定写法
+        return method(request_or_iterator, context)
+
+    # 2, 然后实现 interceptor_service 方法
+    def intercept_service(self, continuation, handler_call_details):
+        metadata = dict(handler_call_details.invocation_metadata)
+
+        # 模拟访问数据库, 验证了用户名密码
+        if 'username' in metadata and metadata['username'] == 'liudehua':
+            # 通过验证, 则绑定到类数据.user中
+            self.user = {'id': 1, 'username': 'liudehua'}
+        else:
+            # 验证失败, 则将该属性设为 None
+            self.user = None
+
+        # 固定写法
+        return super().intercept_service(continuation, handler_call_details)
+
+
+# 此时, 就可以在服务类中通过 context.user 获取数据
+class ArticleService(article_pb2_grpc.ArticleServiceServicer):
+    def ArticleList(self, request, context):
+        print("user:", context.user)
+
+        # ...
+```
+
+### 错误处理
+
+- 与http协议类似, 可以在请求结果非正常时返回错误状态码和错误信息
+
+- 服务端demo
+
+```python
+class ArticleService(article_pb2_grpc.ArticleServiceServicer):
+    def ArticleList(self, request, context):
+        response = article_pb2.ArticleListResponse()
+
+        # 假设直接出错了
+        # 配置状态码(0为正常)
+        context.set_code(grpc.StatusCode.NOT_FOUND)
+        # 配置提示信息
+        context.set_details('资源不存在!')
+
+        return response
+```
+
+- 客户端demo
+
+```python
+def main():
+    with grpc.insecure_channel("127.0.0.1:5001") as channel:
+        intercepted_channel = grpc.intercept_channel(channel, ClientInterceptor())
+        stub = article_pb2_grpc.ArticleServiceStub(intercepted_channel)
+        request = article_pb2.ArticleListRequest(page=1, page_size=20)
+
+        try:
+            # 如果正常
+            response = stub.ArticleList(request)
+            print(response.articles)
+        except grpc.RpcError as e:
+            # 如果发生错误
+            # 提取状态码
+            print(e.code())
+            # 提取错误信息
+            print(e.details())
+```
+
+- 总结:
+  - 服务端设置状态码, 错误信息 `context.set_code(grpc.StatusCode.???)`, `context.set_details('错误提示信息')`
+  - 客户端获取异常状态码, 错误信息 `grpc.RpcError.code()`, `.grpc.RpcError.details()`
+  - 更多状态码参考文档 <https://grpc.io/docs/guides/status-codes/>
+
+### 超时机制
+
+```python
+def main():
+    with grpc.insecure_channel("127.0.0.1:5001") as channel:
+        intercepted_channel = grpc.intercept_channel(channel, ClientInterceptor())
+        stub = article_pb2_grpc.ArticleServiceStub(intercepted_channel)
+        request = article_pb2.ArticleListRequest(page=1, page_size=20)
+
+        try:
+            # 在请求服务器时, 配置参数 timeout = 单位秒
+            response = stub.ArticleList(request, timeout=2)
+            print(response.articles)
+        except grpc.RpcError as e:
+            # 假设服务器2秒没有响应, 则会返回错误状态码 StatusCode.DEADLINE_EXCEEDED
+            print(e.code())
+```

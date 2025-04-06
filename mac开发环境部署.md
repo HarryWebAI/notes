@@ -137,4 +137,44 @@ alias pip="/Library/Frameworks/Python.framework/Versions/3.13/bin/pip3"
     // 这里添加这句话
     "python.terminal.activateEnvironment": true
 }
-````
+```
+
+## node 的一些操作
+
+- 关于缓存的一些命令
+
+```zsh
+# 获取缓存路径
+npm config get cache  
+# 强制清理缓存
+npm cache clean --force  
+# 检查缓存大小, 为0则清空
+npm cache verify 
+# 查看node装了哪些包
+npm list -g --depth=0 
+```
+
+## python.pip 的一些操作
+
+- 常用命令
+
+```zsh
+# 使用前请看看当前用的是哪个
+which pip
+# 指定解释器(虚拟环境)
+source .venv/bin/activate
+# 更新 pip
+python -m pip install --upgrade pip
+# 获取缓存路径
+pip cache dir  
+# 清理缓存
+pip cache purge
+# 生成全局依赖生命文件
+pip freeze > requirements.txt  
+# 通过该声明文件干掉所有包
+pip uninstall -r requirements.txt -y  
+```
+
+## PostMan
+
+- 下载地址 <https://www.postman.com/downloads/>
