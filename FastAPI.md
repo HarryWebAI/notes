@@ -8,7 +8,7 @@
 
 ## 安装
 
-- 命令: `pip install fastAPI`, 建议添加参数 `[standard]` (安装稳定版)
+- 命令: `pip install "fastapi[standard]"`, 建议添加参数 `[standard]` (安装稳定版)
 
 ## 第一个 fastAPI 程序
 
@@ -54,10 +54,12 @@ async def item(item_id: int, q: Optional[str]=None) -> dict: # -> dict : 函数�
 
 ### 运行项目
 
-- 命令: `fastAPI dev main.py`
+- 命令: `fastapi dev main.py`
 - 上面的命令是 fastAPI 最近官方提供的开发环境下运行的命令, 每次修改代码并保存后, 项目都会重新加载代码再启动
-- 但如果实际投入生产环境, 我们必须安装 Uvicorn: `pip install uvicorn[standard]`, 然后使用命令 `uvicorn main:app --reload` (--reload表示修改代码并保存时重载)
+- 但如果实际投入生产环境, 我们必须安装 Uvicorn: `pip install "uvicorn[standard]"`, 然后使用命令 `uvicorn main:app --reload` (--reload表示修改代码并保存时重载)
 - 无论用那种方法启动, 都可以指定端口号, 命令末尾添加参数 `--port 你希望项目运行在哪个端口`
+
+> 建议使用 Uvicorn, fastapi dev main.py 这条命令本质上也是封装的这条命令
 
 ## python 类型检查
 
@@ -199,3 +201,152 @@ if __name__ == '__main__':
 - 正整数 `PositiveInt`
 
 > 在学习这里的时候犯了个特别二的错误: 我稀里糊涂地把文件名字写为 pydantic.py 了, 然后发现导包导不进来, 我搁着自己导自己呢! **命名文件时切忌和已经存在的包重名!**
+
+## 请求数据
+
+### 路由参数
+
+- demo
+
+```python
+from fastapi import FastAPI, Path, Query
+
+
+app = FastAPI()
+
+@app.get('/')
+async def root():
+    return {"message": "根"}
+
+# 路径参数: 作为路由的一部分, 必传, 否则404
+@app.get("/hello/{name}")
+# 参数 (参数名name: 参数类型str = Path(max_length=最长10位, 描述="生成api文档时展示的描述类似注释"))
+# 想要查看api文档, 启动服务器后, 访问 127.0.0.1:8000/docs 即可
+async def say_hello(name: str = Path(max_length=10, description='路径参数name: 必须填写用户名')):
+    """
+    这里的内容也会在 /docs 路由下展示
+    :param name:
+    :return:
+    """
+    # 路径参数, 可以直接在函数内部读取
+    return {'message': f"你好, {name}"}
+
+# 查询参数: ?key=value&key=value
+@app.get("/books")
+# 参数 (..., page_size: int = 默认值为10)
+# async def book_list(page: int, page_size: int = 10):
+async def book_list(
+    page: int, page_size: int = Query(default=10, description="查询参数page_size:每页数量, 默认为10")
+):
+    # 查询参数, 同样可以在函数内部直接读取, 但是如果不传入且没有默认值, 会报错
+    return {"message": f"page是{page}, page_size是{page_size}"}
+
+```
+
+- 路径参数: ...url/xxx
+- 路径参数可以使用 Path 包装: `参数名: 参数类型 = Path(一些限限制, description="描述信息")`
+- 查询参数: ...url?key=value
+- 查询参数可以使用 Query 包装: `参数名: 参数类型 = Query(默认值, 一些限制, description="...")`
+- 这些参数都可以在函数内部直接访问
+- 描述信息, 文档注释都可以在 `当前服务器默认127.0.0.1:8000/docs` 页面上查看
+
+### Body 上的参数
+
+- 示例代码
+
+```python
+from fastapi import FastAPI, Path, Query, Body
+from pydantic import BaseModel, field_validator, Field
+from typing import Annotated
+
+
+class Item(BaseModel):
+    """
+    定义模型
+    """
+    # 配置字段 数据名称: 数据类型 = Field(一些基础验证, 可以配置默认值)
+    name: str = Field(max_length=10, default='无名书籍')
+    # 这里可以实现稍微详细的验证规则 将Field作为元数据metadata传入
+    description: Annotated[float, Field(max_length=10)]
+    price: float | None = 0
+    
+    # 类方法实现更细致的字段验证方法
+    @field_validator('name')
+    @classmethod
+    def validate_name(cls, value: str):
+        if ' ' in value:
+            raise ValueError('名称中不能包含空格')
+        
+        return value
+
+@app.put("/item/{item_id}")
+async def update_item(item_id: int, item: Item = Body(description="传入编辑的数据")):
+    print(f"item_id是{item_id}")
+    print(f"item的name是{item.name}")
+
+    return {"message": f"修改数据已传入, 在服务器控制台查看"}
+```
+
+- Body 数据通过PostMan配置请求的Body.raw传入(此处学习暂用json格式)
+- 验证 Body 数据, 需要定义一个 pydandic Basemodel
+- 基本的数据类型验证直接在类属性上配置类型, 也可以 `=Field()` 进一步配置
+- 实现稍复杂的数据类型可以通过 Anootated 类型, 将 Field 作为元数据实现验证
+- 更详细的验证方法就可以通过定义类方法(两个装饰器 `field_validator` 加工, `classmetod` 声明为类方法)实现
+
+### Cookie 上的参数
+
+- 示例代码
+
+```python
+from fastapi import Cookie
+from fastapi.responses import JSONResponse
+
+
+@app.get('/cookie/set')
+async def set_cookie(
+    # 配置接收 cookie
+    username: str | None = Cookie(description='cookie数据_username', default=None),
+    password: str | None = Cookie(description='cookie数据_password', default=None)
+):
+    # print (f"username: {username}, password: {password}")
+
+    # 初始化响应对象
+    response = JSONResponse(content={"message": "cookie设置成功"})
+
+    # 配置cookie
+    response.set_cookie('username', username)
+
+    # 返回响应
+    return response
+```
+
+- 同样在参数中接收
+- 发送 Cookie 需要 PostMan 配置请求 header `Cookie`, `key=value没有引号没有空格;如果有第二个参数用分号隔开`
+- 设置 Cookie 需要借助 JSONResponse, 先实例化一个对象, 再调用 `对象.set_cookie()` 函数
+- 最后我们在客户端会得到`{"message": "cookie设置成功"}`, 同时 cookie 里(PostMan 右上角)会显示客户端给设置的 Cookie
+
+### 请求头上的参数
+
+- 请求头上有很多隐藏参数, 打开 PostMan, 创建任意请求, 配置 Headers 时, 这些东西默认隐藏 Hidden
+- 开启后就会看见, 有比如 User-Agent 这些属性, 但以 User-Agent 为例, 这个名称是有`-`符号的, 并不能在服务端获取, 所以它在服务端叫做 `user_agent`
+- 示例代码: 获取请求你头里的数据
+
+```python
+from fastapi import Header
+
+
+@app.get('/header/get')
+# 定义方式同样
+async def get_header(user_agent: str | None = Header(description='请求头里的 User-Agent')):
+    print(f"客户端传来的User-Agent是: {user_agent}")
+
+    return {"message": "请求头参数接收成功"}
+```
+
+- 传过来的命名规则: 大写变小写, `-`变`_`
+
+### 总结
+
+1. 所有客户端传来的数据, 都可以通过参数的形式接收, 有 `Path, Query, Body, Cookie, Header` 等
+2. 想要接收不同请求不同形式的参数, 只需要定义接口函数时, 在参数中声明 `(变量名: 变量类型 = 变量位置或者形式(其他参数))`
+3. 只要成功接收, 那么函数里可以直接通过变量名对这些参数进行读取和操作
