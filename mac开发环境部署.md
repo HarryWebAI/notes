@@ -18,7 +18,7 @@
 
 ### 谷歌浏览器
 
-- choreme <https://www.google.com/chrome/>
+- chrome <https://www.google.com/chrome/>
 
 ### vsCode
 
@@ -178,3 +178,46 @@ pip uninstall -r requirements.txt -y
 ## PostMan
 
 - 下载地址 <https://www.postman.com/downloads/>
+
+## MySQL
+
+- 需要通过 HomeBrew 下载
+
+### HomeBrew 的一些命令
+
+```zsh
+# 更新 HomeBrew 本体
+brew update
+# 更新软件包
+brew upgrade
+# 查看可升级的包
+brew outdated
+# 重制包仓库
+cd $(brew --repo) && git reset --hard HEAD
+
+# 有些敏感的包(不需要升级的) 可以锁定和解锁
+brew pin 包名  # 锁定 
+brew unpin 包名  # 解锁
+```
+
+### 开始安装 MySQL
+
+- 依次执行以下命令
+
+```zsh
+# 通过 HomeBrew 安装 MySQL
+brew install mysql
+
+# 启动 MySQL 服务
+brew services start mysql
+
+# 添加环境变量
+echo 'export PATH="/usr/local/mysql/bin:$PATH"' >> ~/.zshrc # 添加到 zsh 中(我用的是mac默认的zsh)
+echo 'export PATH="/usr/local/mysql/bin:$PATH"' >> ~/.bash_profile # 添加到 bash 中(如果用bash的话)
+source ~/.zshrc # 生效命令
+
+# 配置root用户密码
+mysqladmin -u root password '新密码'
+
+# 搞定, 现在可以用 NaviCat 测试链接了!
+```
