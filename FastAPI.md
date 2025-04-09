@@ -350,3 +350,140 @@ async def get_header(user_agent: str | None = Header(description='请求头里�
 1. 所有客户端传来的数据, 都可以通过参数的形式接收, 有 `Path, Query, Body, Cookie, Header` 等
 2. 想要接收不同请求不同形式的参数, 只需要定义接口函数时, 在参数中声明 `(变量名: 变量类型 = 变量位置或者形式(其他参数))`
 3. 只要成功接收, 那么函数里可以直接通过变量名对这些参数进行读取和操作
+
+## 依赖注入
+
+> 将重复的代码抽成“依赖”, 在需要使用的地方注入依赖
+
+- 函数依赖项, 类依赖项
+
+```python
+from fastapi import FastAPI, Depends
+from typing import Dict
+from fastapi.responses import JSONResponse
+
+
+app = FastAPI()
+
+@app.get('/')
+async def root():
+    return {"message": "根"}
+
+# 函数依赖项, 哲理假设该函数依赖项将在未来处理公共的列表分页和查询
+async def list_common(
+    page: int = 1,
+    size: int = 10,
+    q: str | None = None
+):
+    query_params = []
+    if q:
+        query_params = q.split('+')
+
+    return {
+        "page": page,
+        "size": size,
+        "query_params": query_params
+    }
+
+@app.get("/items")
+# 注入依赖, 避免重读定义相同的参数, 比如 items 列表, 和 users 列表都需要 page, size, 查询字符串等等
+async def get_items(common: Dict = Depends(list_common)):
+    message = f"传入的页码是{common['page']}, "
+    message += f"传入的每页数量是{common['size']}, "
+    message += f"传入的查询字符串有: "
+
+    for index, query_param in enumerate(common['query_params']):
+        message += query_param
+
+    return {"message": message}
+
+@app.get("/users")
+async def get_users(common: Dict = Depends(list_common), q: str | None = None):
+    message = f"传入的页码是{common['page']}, "
+    message += f"传入的每页数量是{common['size']}, "
+    message += f"传入的查询字符串有: "
+
+    for index, query_param in enumerate(common['query_params']):
+        message += query_param
+
+    # 可以自己接收重名的参数, 但值和 common 里的一样
+    message += f"自己接收的参数是{q}"
+
+    return {"message": message}
+
+# 类依赖项
+class CommonQueryParam:
+    def __init__(self, q:str | None = None, skip: int = 0, limit: int = 100):
+        self.q = q
+        self.skip = skip
+        self.limit = limit
+
+    def get_query_params(self) -> list:
+        query_params = []
+        if self.q:
+            query_params = self.q.split(" ")
+
+        return query_params
+
+@app.get('/books')
+async def get_books(params = Depends(CommonQueryParam)):
+    return {"message": f"用户传入的query_params为{params.get_query_params()}"}
+```
+
+- 子依赖项: 一个依赖可以注入其他的依赖项, 可以多层依赖, 略
+
+- 视图装饰器依赖: `@app.get("/items", dependencies = [指定没有返回值的依赖项])`, 略
+
+- 全局依赖(类似中间件), 在初始化app时, `app = fastAPI(dependencies = [依赖项])`
+
+- 模块依赖, 配置路由时使用, 下面路由有示例
+
+- 总结一句话, 通过 `Depend` 注入依赖
+
+## APIRouter
+
+> 我们不可能将所有视图代码都放在 `main.py` 中, 这时候就需要将视图进行分类, 通过 `APIRouter` 实现
+
+- 新建 `~/router/user.py` 以及 `~/router/items.py`, 以 `items.py` 为例:
+
+```python
+from fastapi import APIRouter, Header, Depends
+from fastapi.exceptions import HTTPException
+
+
+# 定义依赖项
+async def login_required(
+    token: str = Header()
+):  
+    # 注入路由器后, 访问此路由器下的所有路由, 必须传入 Header.token 且必须是 'liudehua' (模拟登陆认证)
+    if token != 'liudehua':
+        raise HTTPException(status_code=403, detail='认证令牌验证失败')
+
+# 定义路由
+router = APIRouter(
+    # 路由前缀
+    prefix = '/item',
+    tags = ['item'],
+    # 注入依赖, 现在必须“登录”才能访问
+    dependencies = [Depends(login_required)]
+)
+
+# 装饰器的形式注册路由, 现在必须通过 url/item/list才能访问
+@router.get('/list')
+async def get_item_list():
+    return {"message": "items列表"}
+```
+
+- 必须要在 `~/main.py` 中注册路由: 
+
+```python
+from fastapi import FastAPI
+from routers import users, items
+
+
+app = FastAPI()
+
+# 注册路由
+app.include_router(users.router)
+app.include_router(items.router)
+```
