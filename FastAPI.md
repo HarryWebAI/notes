@@ -492,6 +492,7 @@ app.include_router(items.router)
 
 ### 准备工作
 
+- 创建一个用于学习的数据表 `fastapi_sqlalchemy`
 - 通过 **SQLAlchemy** 操作数据库, 安装异步的 sqlalchemy: `pip install "sqlalchemy[asyncio]"`
 - 还需要一个异步驱动 `pip install asyncmy`, 但要使用该工具, 需要依赖Cython编译扩展模块，而Windows系统需要Visual C++ Build Tools支持, 以 windows 系统为例:
     1. 访问 <https://visualstudio.microsoft.com/zh-hans/visual-cpp-build-tools/> 下载Microsoft C++ Build Tools, 然后双击运行
@@ -542,7 +543,7 @@ AsyncSessionFactory = sessionmaker(
 Base = declarative_base()
 ```
 
-- 可以将create_async_engine的第一个参数配置为常量再投入使用, 比如: `DB_URI = "mysql+asyncmy://用户名:密码@主机名:端口号/数据库名称?charset=utf8mb4"`
+- 可以将create_async_engine的第一个参数配置为常量再投入使用, 比如: `DB_URI = "数据库软件+驱动程序://用户名:密码@主机名:端口号/要连接的数据库名称?charset=utf8mb4"`
 
 - 创建会话工厂部分会报静态检查错误, 不用管他
 
