@@ -474,7 +474,7 @@ async def get_item_list():
     return {"message": "items列表"}
 ```
 
-- 必须要在 `~/main.py` 中注册路由: 
+- 必须要在 `~/main.py` 中注册路由:
 
 ```python
 from fastapi import FastAPI
@@ -487,3 +487,107 @@ app = FastAPI()
 app.include_router(users.router)
 app.include_router(items.router)
 ```
+
+## 操作数据库
+
+### 准备工作
+
+- 通过 **SQLAlchemy** 操作数据库, 安装异步的 sqlalchemy: `pip install "sqlalchemy[asyncio]"`
+- 还需要一个异步驱动 `pip install asyncmy`, 但要使用该工具, 需要依赖Cython编译扩展模块，而Windows系统需要Visual C++ Build Tools支持, 以 windows 系统为例:
+    1. 访问 <https://visualstudio.microsoft.com/zh-hans/visual-cpp-build-tools/> 下载Microsoft C++ Build Tools, 然后双击运行
+    2. 搜索并勾选合适的 "C++ 生成工具", "Windows 10 SDK", 建议直接选择 `使用 C++ 的桌面开发`
+- 使用Python连接MySQL需要用cryptography对密码进行加密，所以还需要安装以下包: `pip install cryptography`
+
+### SQLAlchemy 连接数据库
+
+- 新建 `~/models/__init__.py`
+
+```python
+from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
+from sqlalchemy.orm import sessionmaker
+from sqlalchemy.ext.declarative import declarative_base
+
+
+# 配置连接引擎
+engine = create_async_engine(
+    # 数据库URI配置: "数据库+驱动://用户名:密码@主机:端口/数据库名称?charset=utf8mb4"
+    "mysql+asyncmy://root:root@127.0.0.1:3306/fastapi_sqlalchemy?charset=utf8mb4",
+    # 将输出所有执行SQL的日志（默认是关闭的）
+    echo=True,
+    # 连接池大小（默认是5个）
+    pool_size=10,
+    # 允许连接池最大的连接数（默认是10个）
+    max_overflow=20,
+    # 获得连接超时时间（默认是30s）
+    pool_timeout=10,
+    # 连接回收时间（默认是-1，代表永不回收）
+    pool_recycle=3600,
+    # 连接前是否预检查（默认为False）
+    pool_pre_ping=True,
+)
+
+# 创建会话工厂
+AsyncSessionFactory = sessionmaker(
+    # Engine或者其子类对象（这里是AsyncEngine）
+    bind=engine,
+    # Session类的代替（默认是Session类）
+    class_=AsyncSession,
+    # 是否在查找之前执行flush操作（默认是True）
+    autoflush=True,
+    # 是否在执行commit操作后Session就过期（默认是True）
+    expire_on_commit=False
+)
+
+# 创建模型
+Base = declarative_base()
+```
+
+- 可以将create_async_engine的第一个参数配置为常量再投入使用, 比如: `DB_URI = "mysql+asyncmy://用户名:密码@主机名:端口号/数据库名称?charset=utf8mb4"`
+
+- 创建会话工厂部分会报静态检查错误, 不用管他
+
+- 上面的代码可以复用
+
+### 创建模型
+
+- 新建用户模型 `~/models/users.py`
+
+```python
+# 这里的Base就是__init__.py里的Base
+from models import Base
+from sqlalchemy import Column, Integer, String
+
+
+class User(Base):
+    __tablename__ = 'user'
+    id = Column(Integer, primary_key=True, autoincrement=True, index=True)
+    email = Column(String(100), unique=True, index=True)
+    username = Column(String(100), unique=True)
+    password = Column(String(200), nullable=False)
+```
+
+- 为了方便外部使用该模型, 可以在`__init__.py`里导入 User
+
+```python
+# 之前的代码...
+
+# 导入其他模型的python文件
+from . import users
+```
+
+### 执行迁移
+
+- 安装迁移管理工具: `pip install alembic`
+- 安装完成后, 创建迁移仓库 `alembic init alembic --template async`, 这会生成一个 `~/alembic/` 文件夹, 以及 `~/alembic.ini` 配置文件, 编辑:
+  - `alembic.ini`: `sqlalchemy.url = 之前写的数据库URI配置`
+  - `~/alembic/env.py`:
+
+  ```python
+    # 找到 target_metadata = target_metadata 这句话, 修改为:
+    from models import Base
+    target_metadata = Base.metadata
+  ```
+
+- 创建迁移 `alembic revision --autogenerate -m "修改的内容"`, 这会自动在`~/alembic/versions/` 下面生成一个python文件(迁移命令就在里面)
+- 执行迁移, 创建数据表 `alembic upgrade head`
+- 如果需要回退, 执行命令 `alembic downgrade`
