@@ -592,3 +592,268 @@ from . import users
 - 创建迁移 `alembic revision --autogenerate -m "修改的内容"`, 这会自动在`~/alembic/versions/` 下面生成一个python文件(迁移命令就在里面)
 - 执行迁移, 创建数据表 `alembic upgrade head`
 - 如果需要回退, 执行命令 `alembic downgrade`
+
+### 多表关系
+
+- 1 对 1 关系,  `user.py`
+
+```python
+from models import Base
+from sqlalchemy import Column, Integer, String, ForeignKey
+from sqlalchemy.orm import relationship
+
+
+class User(Base):
+    """用户模型"""
+    __tablename__ = 'user'
+    id = Column(Integer, primary_key=True, autoincrement=True, index=True)
+    email = Column(String(100), unique=True, index=True)
+    username = Column(String(100), unique=True)
+    password = Column(String(200), nullable=False)
+
+class UserExtension(Base):
+    """用户扩展信息 1:1 用户"""
+    __tablename__ = 'user_extension'
+    id = Column(Integer, primary_key=True, index=True)
+    university = Column(String(100))
+    # 1:1 外键
+    user_id = Column(Integer, ForeignKey("user.id"))
+    # 通过 relationship 函数指定关联模型, 通过 backref="指定名称"后, 可以通过 user.extension 即可获取用户扩展信息, uselist参数意为该信息是否是多条, 一个用户只有一个扩展信息, 所以为 False
+    user = relationship(User, backref="extension", uselist=False)
+```
+
+- 1 对 多关系, 多 对 多关系 `article.py`
+
+```python
+from models import Base
+from .user import User
+from sqlalchemy import Column, Integer, String, ForeignKey, Text
+from sqlalchemy.orm import relationship
+
+
+class Tag(Base):
+    """文章 n:n 标签"""
+    __tablename__ = 'tag'
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String(100), unique=True)
+    # 同理, 通过 relationship 函数, secondary指定第三方表, back_populates指定索引名称, lazy="dynamic" 声明懒加载
+    articles = relationship("Article", secondary="article_tag", back_populates='tags', lazy="dynamic")
+
+class Article(Base):
+    """文章 n:1 用户"""
+    __tablename__ = 'article'
+    id = Column(Integer, primary_key=True, index=True)
+    title = Column(String(100), nullable=False)
+    content = Column(Text, nullable=False)
+    author_id = Column(Integer, ForeignKey("user.id"))
+    author = relationship(User, backref="articles")
+    tags = relationship(Tag, secondary="article_tag", back_populates="articles", lazy="dynamic")
+
+class ArticleTag(Base):
+    """通过第三数据表实现多对多关系绑定"""
+    __tablename__ = 'article_tag'
+    id = Column(Integer, primary_key=True, index=True)
+    article_id = Column(Integer, ForeignKey("article.id"))
+    tag_id = Column(Integer, ForeignKey("tag.id"))
+```
+
+- 导入 `relationship` 函数: `from sqlalchemy.orm import relationship`
+- 1:1 关系, 通过 `user_id = Column(Integer, ForeignKey("user.id"))` 指定外键, 通过relationshi函数指定映射名称 `user = relationship(User, backref="extension", uselist=False)`
+- 1:n 关系, 指定外建后, 声明关系: `relationship(User, backref="articles")` , 之后就可以用 `user.articles` 获取用户名下所有的文章了
+- n:n 关系, 需要现在各自的模型中 `tags = relationship(Tag, secondary="article_tag", back_populates="articles", lazy="dynamic")`, 然后借助第三方表实现 `article.tags` 获取文章的所有标签, 或者 `tag.articles` 获取标签下所有的文章
+
+## CURD 操作
+
+### 梳理思路
+
+1. `~/models/` 存放模型文件, 上面已完成
+2. `~/routers/` 存放路由和视图, 稍后完成
+3. `~/schemas/` 存放模型数据类型限制, 类似于 django.serializer, 稍后完成
+
+- 用户提交请求 -> 路由文件接收请求 -> 套用 schemas 里定义的数据类型限制确保数据合法 -> 访问数据库进行操作 -> 按照 schemas 里定义的格式返回响应
+
+### 完成 schemas
+
+- `~/schemas/user.py`
+
+```python
+from pydantic import BaseModel, Field
+
+
+class CreateUserRequestSchema(BaseModel):
+    """创建用户请求的数据限制"""
+    email: str = Field(max_length=100)
+    username: str
+    password: str
+
+class CreateUserResponseSchema(BaseModel):
+    """创建用户响应的数据限制"""
+    id: int
+    username: str
+    email: str
+```
+
+### 完成 routers
+
+- `~/routers/user.py`
+
+```python
+from fastapi import APIRouter, status
+from models.user import User
+from models import AsyncSessionFactory
+from schemas.user import CreateUserRequestSchema, CreateUserResponseSchema
+from fastapi.exceptions import HTTPException
+
+router = APIRouter(
+    prefix='/user',
+    tags=['user']
+)
+
+# 配置响应模型 response_model=
+@router.post('/add', response_model=CreateUserResponseSchema)
+# 配置请求数据格式 user_data:
+async def add_user(user_data: CreateUserRequestSchema):
+    # # 1, 不使用异步上下文管理器:
+    # # 1.1, 通过工厂函数创建session连接数据库
+    # session = AsyncSessionFactory()
+    # try:
+    #     # 1.2 尝试添加用户
+    #     user = User(email=user_data.email, username=user_data.username, password=user_data.password)
+    #     session.add(user)
+    #     await session.commit()
+    # except Exception as e:
+    #     # 1.3 如果添加失败
+    #     await session.rollback()
+    #     raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="用户添加失败")
+    # # 1.4 务必关闭数据库连接
+    # await session.close()
+
+    # 2, 使用异步上下文管理器
+    async with AsyncSessionFactory() as session:
+        # 2.2, 但不使用异步事务
+        # try:
+        #     user = User(email=user_data.email, username=user_data.username, password=user_data.password)
+        #     session.add(user)
+        #     await session.commit()
+        # except Exception as e:
+        #     await session.rollback()
+        #     raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="用户添加失败")
+
+        # 2.3, 使用异步事务
+        try:
+            async with session.begin():
+                user = User(email=user_data.email, username=user_data.username, password=user_data.password)
+                session.add(user)
+        except Exception as e:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="用户添加失败")
+        
+    return user
+```
+
+- 建议就用未注销代码使用的方式, 因为它不需要 commit 或者 rollback
+- 更建议将session的创建和关闭作为一个依赖项注入, 完整代码如下:
+
+```python
+from fastapi import APIRouter, status, Depends
+from models.user import User
+from models import AsyncSessionFactory
+from schemas.user import CreateUserRequestSchema, CreateUserResponseSchema
+from fastapi.exceptions import HTTPException
+from models import AsyncSession
+
+
+router = APIRouter(
+    prefix='/user',
+    tags=['user']
+)
+
+async def get_session():
+    """session的创建和关闭"""
+    session = AsyncSessionFactory()
+    try:
+        # 通过yield关键字实现session在视图层完成其他操作
+        yield session
+    finally:
+        # 最终关闭session
+        await session.close()
+
+@router.post('/add', response_model=CreateUserResponseSchema)
+async def add_user(
+    user_data: CreateUserRequestSchema, 
+    # 接收参数时, 通过依赖注入的方式, 获取session对象
+    session: AsyncSession = Depends(get_session)
+):
+    try:
+        async with session.begin():
+            user = User(email=user_data.email, username=user_data.username, password=user_data.password)
+            session.add(user)
+    except Exception as e:
+        print(e)
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="用户添加失败")
+
+    return user
+```
+
+### 使用中间件实现
+
+- 新建 `~/middlewares/dbs.py`, 这个文件用来存放用于操控数据库的session创建的中间件逻辑
+
+```python
+from fastapi import FastAPI
+from fastapi.requests import Request
+from models import AsyncSessionFactory
+
+
+app = FastAPI()
+
+# 下面两行是固定写法
+@app.middleware('http')
+async def create_session_middleware(request: Request, call_next):
+    # 创建session
+    session = AsyncSessionFactory()
+    # 放在 requset.state.session 属性上, 这句话也可以写为 setattr(request.state, 'session', session)
+    request.state.session = session
+    # 上面是请求达到视图函数前执行的代码
+
+    response = await call_next(request)
+
+    # 下面是响应返回浏览器之前执行的代码
+    # 关闭session
+    await session.close()
+    
+    return response
+```
+
+- 这样一来, 在视图中, 就可以接收request, 并调用其内部针对数据库操作的方法了, 比如 `~/routers/user.py`
+
+```python
+from fastapi import APIRouter, status
+from models.user import User
+from schemas.user import CreateUserRequestSchema, CreateUserResponseSchema
+from fastapi.exceptions import HTTPException
+from fastapi.requests import Request
+
+
+router = APIRouter(
+    prefix='/user',
+    tags=['user']
+)
+
+@router.post('/add', response_model=CreateUserResponseSchema)
+async def add_user(request: Request, user_data: CreateUserRequestSchema):
+    session = request.state.session
+
+    try:
+        async with session.begin():
+            user = User(email=user_data.email, username=user_data.username, password=user_data.password)
+            session.add(user)
+    except Exception as e:
+        print(e)
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="用户添加失败")
+
+    return user
+```
+
+> 如果每个视图函数都需要操纵数据库, 那么用中间件最好
+>
+> 如果只有个别视图函数需要操作数据库, 那么使用依赖注入的方式最好
