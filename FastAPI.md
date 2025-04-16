@@ -662,9 +662,7 @@ class ArticleTag(Base):
 - 1:n 关系, 指定外建后, 声明关系: `relationship(User, backref="articles")` , 之后就可以用 `user.articles` 获取用户名下所有的文章了
 - n:n 关系, 需要现在各自的模型中 `tags = relationship(Tag, secondary="article_tag", back_populates="articles", lazy="dynamic")`, 然后借助第三方表实现 `article.tags` 获取文章的所有标签, 或者 `tag.articles` 获取标签下所有的文章
 
-## CURD 操作
-
-### 梳理思路
+### 合理分配目录结构的思路
 
 1. `~/models/` 存放模型文件, 上面已完成
 2. `~/routers/` 存放路由和视图, 稍后完成
@@ -824,6 +822,7 @@ async def create_session_middleware(request: Request, call_next):
     return response
 ```
 
+- 然后在 `main.py` 中加入中间件 `app.add_middleware(BaseHTTPMiddleware, dbs.create_session_middleware)`
 - 这样一来, 在视图中, 就可以接收request, 并调用其内部针对数据库操作的方法了, 比如 `~/routers/user.py`
 
 ```python
@@ -857,3 +856,164 @@ async def add_user(request: Request, user_data: CreateUserRequestSchema):
 > 如果每个视图函数都需要操纵数据库, 那么用中间件最好
 >
 > 如果只有个别视图函数需要操作数据库, 那么使用依赖注入的方式最好
+
+### CURD 操作示例
+
+- 示例代码
+
+```python
+from fastapi import APIRouter, status
+from models.user import User
+from schemas.user import CreateUserRequestSchema, CreateUserResponseSchema, UserResponseSchema, UpdateUserRequestSchema
+from fastapi.exceptions import HTTPException
+from fastapi.requests import Request
+from sqlalchemy import delete, select, or_, and_, update
+from typing import List
+
+
+router = APIRouter(
+    prefix='/user',
+    tags=['user']
+)
+
+@router.post('/add', response_model=CreateUserResponseSchema)
+async def add_user(request: Request, user_data: CreateUserRequestSchema):
+    """新增"""
+    # 获取 session 对象
+    session = request.state.session
+
+    try:
+        # 开启异步上下文管理器
+        async with session.begin():
+            # 处理数据
+            user = User(email=user_data.email, username=user_data.username, password=user_data.password)
+            # 添加到数据库
+            session.add(user)
+            # session 会自己 commit
+    except Exception as e:
+        print(e)
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="用户添加失败")
+
+    return user
+
+@router.delete('/del/{user_id}')
+async def del_user(request: Request, user_id: int):
+    """删除"""
+    session = request.state.session
+    # print(user_id)
+
+    try:
+        async with session.begin():
+            # 配置 sql 语句
+            sql = delete(User).where(User.id == user_id)
+            # 异步执行 sql 语句
+            await session.execute(sql)
+
+        return {"message":"删除成功"}
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="删除失败")
+    
+
+@router.get('/list', response_model=List[UserResponseSchema])
+async def get_users(request: Request, q: str | None = None, page: int = 1, page_size: int = 2):
+    """列表"""
+    session = request.state.session
+
+    # 配置基础查询语句
+    sql = select(User.id, User.username, User.email)
+
+    # 假设如果有筛选条件, 进行筛选
+    if q:
+        sql = sql.where(
+            or_(User.username.contains(q), User.email.contains(q))
+        )
+
+    # 配置分页
+    offset = (page - 1) * page_size
+
+    # 进行分页查询
+    sql = sql.order_by(User.id.desc()).offset(offset).limit(page_size)
+
+    try:
+        async with session.begin():
+            # 执行查询
+            query = await session.execute(sql)
+            # 遍历查询结果, 添加到users列表中
+            users = [row._asdict() for row in query]
+
+        # 返回数据
+        return users
+    except Exception as e:
+        print(e)
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="用户列表获取失败")
+
+@router.get('/detail/{user_id}', response_model=UserResponseSchema)
+async def get_user_detail(request: Request, user_id: int):
+    """详情"""
+    session = request.state.session
+
+    try: 
+        async with session.begin():
+            # select(模型.需要的字段)
+            sql = select(User.id, User.username, User.email).where(User.id == user_id)
+            query = await session.execute(sql)
+            user = query.one()._asdict()
+
+        return user
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="查找用户失败")
+    
+@router.put('/update/{user_id}')
+async def update_user(request: Request, user_id: int, user_data: UpdateUserRequestSchema):
+    """更新"""
+    session = request.state.session
+
+    if not user_data.email and not user_data.username and not user_data.password:
+        return {"message": "无更新数据传入"}
+    
+    new_values = {}
+    if user_data.email:
+        new_values['email'] = user_data.email
+    if user_data.username:
+        new_values['username'] = user_data.username
+    if user_data.password:
+        new_values['password'] = user_data.password
+
+    try:
+        async with session.begin():
+            sql = update(User).where(User.id == user_id).values(**new_values)
+            await session.execute(sql)
+
+        return {"message": "更新成功"}
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="更新用户失败")
+
+@router.put('/getthenupdate/{user_id}', response_model=UserResponseSchema)
+async def get_then_update(request: Request, user_id: int, user_data: UpdateUserRequestSchema):
+    """先查找再更新, 优点是可以返回修改后的 User 对象, 缺点是需要访问2次数据库"""
+    session = request.state.session
+
+    if not user_data.email and not user_data.username and not user_data.password:
+        return {"message": "无更新数据传入"}
+
+    try:
+        async with session.begin():
+            sql = select(User).where(User.id == user_id)
+            query = await session.execute(sql)
+            user = query.scalars().first()
+
+            if user_data.email:
+                user.email = user_data.email
+            if user_data.username:
+                user.username = user_data.username
+            if user_data.password:
+                user.password = user_data.password
+        
+        return user
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="更新用户失败")
+```
+
+- 上面的代码完整地示例了针对User模型的全部增删改查的操作, 可参考性极强, 但有以下逻辑未完善:
+  - 错误处理全部是返回400, 其实有可能报错是因为数据库层面写入时某唯一索引的字段重复, 或者其他问题, 但都没有排查
+  - 数据没有在 Schema 层面精确校验, 只要传入指定格式则不报错
