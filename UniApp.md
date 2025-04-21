@@ -162,3 +162,78 @@
 
 - 需要先在 `pages[]` 里将页面注册, 再在 `tabBar.list[]` 里声明
 - 图标可以从 iconfront 里下载 <https://www.iconfont.cn/collections/index>
+
+## 常用组件
+
+- uniApp官方自带`内置组件`和`uni-ui`组件库, 后者需要安装才可使用
+
+### 内置组件
+
+- text 组件, 类似于 `<span>`
+
+```vue
+<template>
+ <view>
+  <text>我不可被复制</text>
+  <text :selectable="true">我可以被选中复制</text>
+  <text>\n</text>
+  <text :space="nbsp">空  格</text>
+ </view>
+</template>
+```
+
+- view 组件, 类似于 `<div>`: 无色无边框宽度默认为100%的容器盒子
+
+```vue
+<!-- hover-class="指定点击后的样式" -->
+<view class="myview" hover-class="myview-hover">我是view</view>
+```
+
+- button 组件
+
+```vue
+<button type="default" size="mini">默认按钮</button>
+<button type="primary" size="mini">主要按钮</button>
+<button type="warn">警告按钮</button>
+<button loading>加载ing</button>
+```
+
+- image 组件
+
+```vue
+<!-- src="图片地址建议绝对路径" mode="图片缩放模式" -->
+<image src="/static/logo.png" class="myimage" mode="aspectFill"></image>
+```
+
+### uni-ui 组件库
+
+- 下载组件 <https://zh.uniapp.dcloud.io/component/uniui/uni-ui.html>, 需要登录, 看广告, 然后自动下载, 导入到项目中, 生成 `uni-modules/`
+- 投入使用, 以日历组件为例
+
+```vue
+<view class="uniui-container">
+
+  <!-- 以标签形式投入使用即可 -->
+  <uni-calendar
+    ref="myCalendar"
+    :insert="false"
+    @confirm="confirm"
+  ></uni-calendar>
+  
+  <button @click="openMyCalendar">打开日历</button>
+</view>
+
+<script setup>
+ import {ref} from "vue"
+ 
+ const myCalendar = ref()
+ 
+ const openMyCalendar = function() {
+  myCalendar.value.open()
+ }
+ 
+ const confirm = (e) => {
+  console.log(e)
+ }
+</script>
+```
