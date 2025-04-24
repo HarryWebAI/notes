@@ -22,6 +22,7 @@
 - <a href="./drf异步开发.md">drf异步开发</a>
 - <a href="./微服务_gRPC.md">微服务gRPC</a>
 - <a href="./FastAPI.md">FastAPI</a>
+- <a href="./淘乐乐项目开发日志.md">淘乐乐项目开发学习</a>
 
 # 其他工具和部署
 
@@ -40,3 +41,8 @@
 - <a href="https://github.com/HarryWebAI/myoa_backend">后端</a>
 
 ### <a href="https://github.com/HarryWebAI/myerp">myErp个体商户仓库管理系统</a>
+
+### myblog: 基于 vue3(ts) + django.rest_framework 实现的炫酷博客
+
+- <a href="https://github.com/HarryWebAI/myblog_frontend">前端</a>
+- <a href="https://github.com/HarryWebAI/myblog_backend">后端</a>
